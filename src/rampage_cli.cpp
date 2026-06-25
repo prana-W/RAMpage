@@ -4,19 +4,45 @@
 #include "./commands/CommandRegistry.h"
 #include "./commands/CommandModules.h"
 
-// Converts a raw RESP-flavored response into something readable on screen
+// Converts the protocol response ("SUCC:..." / "ERR:...") into human-readable CLI output.
 std::string prettyPrint(const std::string& resp) {
     if (resp.empty()) return "(nil)";
-    char prefix = resp[0];
-    std::string body = resp.substr(1);
 
-    switch (prefix) {
-        case '+': return body;                 
-        case '-': return "(error) " + body;      
-        case ':': return "(integer) " + body;  
-        case '$': return body == "-1" ? "(nil)" : "\"" + body + "\"";
-        default:  return resp;
+    // New unified protocol: "SUCC:<payload>" or "ERR:<message>"
+    if (resp.substr(0, 5) == "SUCC:") {
+        std::string payload = resp.substr(5);
+        if (payload.empty()) return "OK";
+        // Numeric payload → show as integer
+        bool isNum = !payload.empty() && (std::isdigit(payload[0]) || payload[0] == '-');
+        if (isNum) {
+            bool allDigits = true;
+            for (size_t i = (payload[0] == '-' ? 1 : 0); i < payload.size(); ++i) {
+                if (!std::isdigit(payload[i])) { allDigits = false; break; }
+            }
+            if (allDigits) return "(integer) " + payload;
+        }
+        // Pipe-separated list (LRANGE) → show numbered like Redis CLI
+        if (payload.find('|') != std::string::npos) {
+            std::string out;
+            int idx = 1;
+            size_t pos = 0, found;
+            while ((found = payload.find('|', pos)) != std::string::npos) {
+                out += std::to_string(idx++) + ") \"" + payload.substr(pos, found - pos) + "\"\n";
+                pos = found + 1;
+            }
+            out += std::to_string(idx) + ") \"" + payload.substr(pos) + "\"";
+            return out;
+        }
+        // Plain string value
+        return "\"" + payload + "\"";
     }
+
+    if (resp.substr(0, 4) == "ERR:") {
+        return "(error) " + resp.substr(4);
+    }
+
+    // Fallback for unexpected format
+    return resp;
 }
 
 int main() {

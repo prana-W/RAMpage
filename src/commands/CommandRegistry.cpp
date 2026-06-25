@@ -37,7 +37,7 @@ static std::vector<std::string> tokenize(const std::string &line) {
 
 std::string CommandRegistry::execute(Database &db, const std::string &rawLine) {
   std::vector<std::string> tokens = tokenize(rawLine);
-  if (tokens.empty()) return "-ERR empty command";
+  if (tokens.empty()) return "ERR:empty command";
 
   std::string cmdName = tokens[0];
   std::transform(cmdName.begin(), cmdName.end(), cmdName.begin(), ::toupper); // SET/set/Set all work
@@ -45,9 +45,9 @@ std::string CommandRegistry::execute(Database &db, const std::string &rawLine) {
   // Check if such a command name exists in our handlers map
   auto it = handlers.find(cmdName);
   if (it == handlers.end()) {
-    return "-ERR unknown command '" + tokens[0] + "'";
+    return "ERR:unknown command '" + tokens[0] + "'";
   }
   
   std::vector<std::string> args(tokens.begin() + 1, tokens.end());
-  return it->second(db, args); // call the actual handler
+  return it->second(db, args); // call the actual handler — must return "SUCC:..." or "ERR:..."
 }
