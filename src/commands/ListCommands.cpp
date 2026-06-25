@@ -80,14 +80,15 @@ void registerListCommands(CommandRegistry& reg) {
         
         if (res.status == Status::OK && std::holds_alternative<std::vector<std::string>>(res.data)) {
             const auto& vec = std::get<std::vector<std::string>>(res.data);
+            if (vec.empty()) return "(empty list)";
+            // Use pipe '|' as item separator so the entire response fits on one TCP line.
+            // The SDK splits on '|' to reconstruct the array.
             std::string output = "";
             for (size_t i = 0; i < vec.size(); ++i) {
-                output += std::to_string(i + 1) + ") \"" + vec[i] + "\"\n";
+                if (i > 0) output += "|";
+                output += vec[i];
             }
-            if (output.empty()) return "(empty list)";
-            
-            output.pop_back(); 
-            return output; 
+            return output;
         }
         return res.message;
     });
