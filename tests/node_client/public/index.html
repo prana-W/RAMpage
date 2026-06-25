@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAMpage DB Tester</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --container-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --accent: #3b82f6;
+            --accent-hover: #2563eb;
+            --border: #334155;
+            --output-bg: #020617;
+            --output-text: #10b981;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background-color: var(--container-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            height: fit-content;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h1::before {
+            content: "⚡";
+        }
+
+        p.desc {
+            color: var(--text-dim);
+            margin: 0;
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            background-color: var(--bg-color);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.75rem 1rem;
+            color: var(--text-main);
+            font-size: 1rem;
+            font-family: monospace;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--accent);
+        }
+
+        button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 0 1.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        .output-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .output-header {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+
+        pre {
+            background-color: var(--output-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 0;
+            color: var(--output-text);
+            font-size: 0.95rem;
+            overflow-x: auto;
+            min-height: 80px;
+            white-space: pre-wrap;
+        }
+
+        .error {
+            color: #ef4444 !important;
+        }
+        
+        .backend-badge {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div>
+        <h1>RAMpage Control Panel</h1>
+        <p class="desc">Execute commands against your high-performance custom C++ database.</p>
+        <span class="backend-badge" id="backendStatus">Loading Backend Info...</span>
+    </div>
+
+    <form id="cmdForm" class="input-group">
+        <input type="text" id="command" placeholder="e.g. set user1 'John Doe'" autocomplete="off" autofocus>
+        <button type="submit">Execute</button>
+    </form>
+
+    <div class="output-wrapper">
+        <div class="output-header">Terminal Output</div>
+        <pre id="output">Ready for commands...</pre>
+    </div>
+</div>
+
+<script>
+    // Determine which port we are running on (3000 for new_conn, 3001 for persistent)
+    const port = window.location.port;
+    const badge = document.getElementById('backendStatus');
+    
+    if (port === '3000') {
+        badge.innerText = 'Backend: New TCP Connection per Request';
+    } else if (port === '3001') {
+        badge.innerText = 'Backend: Persistent TCP Connection';
+    } else {
+        badge.innerText = 'Backend: Unknown';
+    }
+
+    document.getElementById('cmdForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const input = document.getElementById('command');
+        const output = document.getElementById('output');
+        const command = input.value.trim();
+        
+        if (!command) return;
+
+        input.value = '';
+        output.textContent = 'Executing...';
+        output.className = ''; // remove error class if any
+
+        try {
+            const res = await fetch('http://localhost:3001/execute', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ command })
+            });
+            
+            const data = await res.json();
+            
+            if (!res.ok) {
+                output.textContent = data.error || 'Server Error';
+                output.className = 'error';
+            } else {
+                output.textContent = data.response || '(empty response)';
+            }
+        } catch (err) {
+            output.textContent = 'Failed to connect to Node server: ' + err.message;
+            output.className = 'error';
+        }
+    });
+</script>
+</body>
+</html>

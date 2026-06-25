@@ -9,3 +9,5 @@
 # Build directories
 build/
 bin/
+
+node_modules
