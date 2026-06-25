@@ -5,21 +5,25 @@
 #include <unordered_map>
 
 // POSIX socket and epoll headers (Linux)
-#include <sys/socket.h>
-#include <sys/epoll.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/epoll.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
 #include <cstring>
 
 static const int MAX_EVENTS = 64;
 
-Server::Server(int p) : port(p), serverFd(-1), epollFd(-1) {}
+Server::Server(int p) : port(p), serverFd(-1), epollFd(-1) {
+}
 
 Server::~Server() {
-    if (serverFd != -1) close(serverFd);
-    if (epollFd != -1) close(epollFd);
+    if (serverFd != -1)
+        close(serverFd);
+    if (epollFd != -1)
+        close(epollFd);
 }
 
 // --- Private Helpers ---
@@ -40,9 +44,9 @@ bool Server::setupSocket() {
     fcntl(serverFd, F_SETFL, flags | O_NONBLOCK);
 
     sockaddr_in addr{};
-    addr.sin_family = AF_INET;
+    addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(static_cast<uint16_t>(port));
+    addr.sin_port        = htons(static_cast<uint16_t>(port));
 
     if (bind(serverFd, (sockaddr*)&addr, sizeof(addr)) < 0) {
         std::cerr << "[server] Failed to bind to port " << port << "\n";
@@ -59,7 +63,7 @@ bool Server::setupSocket() {
 
 bool Server::addToEpoll(int fd) {
     epoll_event ev{};
-    ev.events = EPOLLIN; // notify when fd is ready to read
+    ev.events  = EPOLLIN;  // notify when fd is ready to read
     ev.data.fd = fd;
     return epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &ev) == 0;
 }
@@ -70,19 +74,21 @@ void Server::removeClient(int clientFd) {
     std::cout << "[server] Client disconnected (fd=" << clientFd << ")\n";
 }
 
-void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db, CommandRegistry& registry) {
+void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db,
+                                 CommandRegistry& registry) {
     // Process all complete lines (commands) in the buffer
     size_t pos;
     while ((pos = buffer.find('\n')) != std::string::npos) {
         std::string command = buffer.substr(0, pos);
-        buffer.erase(0, pos + 1); // consume the processed command from the buffer
+        buffer.erase(0, pos + 1);  // consume the processed command from the buffer
 
         // Strip any trailing carriage return (for Windows clients like telnet)
         if (!command.empty() && command.back() == '\r') {
             command.pop_back();
         }
 
-        if (command.empty()) continue;
+        if (command.empty())
+            continue;
         if (command == "exit" || command == "quit") {
             removeClient(clientFd);
             return;
@@ -98,7 +104,8 @@ void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db
 // --- Public API ---
 
 void Server::start(Database& db, CommandRegistry& registry) {
-    if (!setupSocket()) return;
+    if (!setupSocket())
+        return;
 
     // Create the epoll instance
     epollFd = epoll_create1(0);
@@ -135,23 +142,24 @@ void Server::start(Database& db, CommandRegistry& registry) {
             if (fd == serverFd) {
                 // --- New client connecting ---
                 sockaddr_in clientAddr{};
-                socklen_t clientLen = sizeof(clientAddr);
-                int clientFd = accept(serverFd, (sockaddr*)&clientAddr, &clientLen);
-                if (clientFd < 0) continue;
+                socklen_t   clientLen = sizeof(clientAddr);
+                int         clientFd  = accept(serverFd, (sockaddr*)&clientAddr, &clientLen);
+                if (clientFd < 0)
+                    continue;
 
                 // Make client socket non-blocking too
                 int flags = fcntl(clientFd, F_GETFL, 0);
                 fcntl(clientFd, F_SETFL, flags | O_NONBLOCK);
 
                 addToEpoll(clientFd);
-                clientBuffers[clientFd] = ""; // initialize empty buffer for this client
+                clientBuffers[clientFd] = "";  // initialize empty buffer for this client
 
                 std::cout << "[server] New client connected (fd=" << clientFd << ") from "
                           << inet_ntoa(clientAddr.sin_addr) << "\n";
 
             } else {
                 // --- Existing client sent data ---
-                char rawBuf[4096];
+                char    rawBuf[4096];
                 ssize_t bytesRead = recv(fd, rawBuf, sizeof(rawBuf) - 1, 0);
 
                 if (bytesRead <= 0) {

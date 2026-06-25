@@ -15,6 +15,26 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wunreachable-code)
 endif()
 
+# -----------------------------------------------------
+# Auto-Formatting (clang-format)
+# -----------------------------------------------------
+find_program(CLANG_FORMAT "clang-format")
+if(CLANG_FORMAT)
+    file(GLOB_RECURSE ALL_CXX_SOURCE_FILES
+        "src/*.cpp" "src/*.h"
+        "tests/*.cpp" "tests/*.h"
+    )
+    add_custom_target(
+        format
+        COMMAND ${CLANG_FORMAT} -i -style=file ${ALL_CXX_SOURCE_FILES}
+        COMMENT "Auto-formatting C++ files with clang-format"
+    )
+else()
+    add_custom_target(format
+        COMMAND ${CMAKE_COMMAND} -E echo "clang-format not found. Skipping auto-formatting."
+    )
+endif()
+
 # Create a core static library containing all the business logic
 add_library(RAMpageCore
     src/database/Database.cpp
@@ -23,6 +43,9 @@ add_library(RAMpageCore
     src/commands/ListCommands.cpp
     src/server/Server.cpp
 )
+
+# Run auto-formatting before compiling the core library
+add_dependencies(RAMpageCore format)
 
 # Allow anything linking to RAMpageCore to easily #include from the src directory
 target_include_directories(RAMpageCore PUBLIC src)

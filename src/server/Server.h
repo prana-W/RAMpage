@@ -1,13 +1,14 @@
 #pragma once
 
 #include <string>
-#include "../database/Database.h"
+
 #include "../commands/CommandRegistry.h"
+#include "../database/Database.h"
 
 class Server {
     int port;
-    int serverFd;   // the listening socket file descriptor
-    int epollFd;    // the epoll instance file descriptor
+    int serverFd;  // the listening socket file descriptor
+    int epollFd;   // the epoll instance file descriptor
 
     // Sets up the listening socket (socket, bind, listen)
     bool setupSocket();
@@ -19,9 +20,10 @@ class Server {
     void removeClient(int clientFd);
 
     // Processes buffered data for a client: splits on '\n' and executes each command
-    void processClientBuffer(int clientFd, std::string& buffer, Database& db, CommandRegistry& registry);
+    void processClientBuffer(int clientFd, std::string& buffer, Database& db,
+                             CommandRegistry& registry);
 
-public:
+   public:
     Server(int port);
     ~Server();
 

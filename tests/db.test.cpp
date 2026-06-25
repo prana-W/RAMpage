@@ -1,6 +1,7 @@
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
+
 #include "../src/database/Database.h"
 
 void printVariant(const DataType& data) {
@@ -28,7 +29,7 @@ void printResponse(const std::string& prefix, const Response& r) {
 
 int main() {
     Database db;
-    
+
     std::cout << "--- Strings ---\n";
     printResponse("SET", db.set("str1", "hello"));
     printResponse("APPEND", db.append("str1", " world"));
@@ -44,7 +45,7 @@ int main() {
     printResponse("LRANGE 0 -1", db.lrange("list1", 0, -1));
     printResponse("RPOP", db.rpop("list1"));
     printResponse("LRANGE 0 -1", db.lrange("list1", 0, -1));
-    
+
     std::cout << "\n--- TTL Expiry ---\n";
     printResponse("SET (50ms TTL)", db.set("temp", "volatile", 50));
     printResponse("GET (Immediate)", db.get("temp"));
