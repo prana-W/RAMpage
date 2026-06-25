@@ -1,0 +1,33 @@
+{
+  "name": "rampage-js",
+  "version": "1.0.0",
+  "description": "Official JavaScript SDK for RAMpage — a high-performance in-memory database.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "keywords": [
+    "rampage",
+    "database",
+    "in-memory",
+    "cache",
+    "sdk",
+    "client",
+    "redis-like",
+    "tcp",
+    "nosql"
+  ],
+  "author": "Pranaw Kumar",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prana-w/RAMpage"
+  },
+  "scripts": {
+    "example": "node examples/basic.js"
+  }
+}

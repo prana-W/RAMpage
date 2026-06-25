@@ -59,3 +59,17 @@ This architecture makes it incredibly easy to add new features. If you wanted to
 - When epoll says a client socket is ready, it means that client has sent some data, so we `recv()` it and append it to that client's personal buffer
 - We also have a `processClientBuffer()` method which processes all the complete commands (lines ending with `\n`) sitting in the client's buffer, one by one sequentially. TCP is a stream protocol so data might arrive in chunks, so keeping a per-client buffer and only executing when we see a `\n` is the right approach
 - Since everything runs in a single thread, there is no concept of race conditions at all!
+- Improve error handling. Now for any error/non-success, the redis server sends a ERR:... and for success SUCC:...., so by proper parsing the start of the strings, we can differentiate between success and error, and for success case we have further different return types based on the command.
+
+# Phase - 5 (Nodejs SDK)
+
+- Implement an ESM based SDK
+- It is made to exaclty feel like the Redis SDK
+- Users can call methods like client.get('name)
+- RampageClient formats strings
+- It is added to the RampageConnection class and request is added to a queue and command is added to TCP socket
+- Data comming from the server is in chunks and connection maintiains a string buffer and appends incoming chunks till it sees a \n
+- After a \n is received, then that command is resolved and popoed from the queue
+- Other error handling like number handling, no key handling, ERR, SUCC handling is done
+- We have Auto reconnect, exponential backoff, event emitter (connect, error, close, reconnecting), in-flight draining in RampageConnection Class
+- Implementing a custom Rampage Error class for handling specific errors
