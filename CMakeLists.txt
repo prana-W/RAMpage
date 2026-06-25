@@ -21,6 +21,7 @@ add_library(RAMpageCore
     src/commands/CommandRegistry.cpp
     src/commands/StringCommands.cpp
     src/commands/ListCommands.cpp
+    src/server/Server.cpp
 )
 
 # Allow anything linking to RAMpageCore to easily #include from the src directory
@@ -29,8 +30,14 @@ target_include_directories(RAMpageCore PUBLIC src)
 # -----------------------------------------------------
 # 1. Main Executable (The CLI interface)
 # -----------------------------------------------------
-add_executable(rampage_cli src/main.cpp)
+add_executable(rampage_cli src/rampage_cli.cpp)
 target_link_libraries(rampage_cli PRIVATE RAMpageCore)
+
+# -----------------------------------------------------
+# 2. TCP Server Executable
+# -----------------------------------------------------
+add_executable(rampage src/main.cpp)
+target_link_libraries(rampage PRIVATE RAMpageCore)
 
 # -----------------------------------------------------
 # 2. Test Executable (The Database tests)

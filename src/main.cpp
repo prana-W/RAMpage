@@ -3,38 +3,33 @@
 #include "./database/Database.h"
 #include "./commands/CommandRegistry.h"
 #include "./commands/CommandModules.h"
+#include "./server/Server.h"
 
-// Converts a raw RESP-flavored response into something readable on screen
-std::string prettyPrint(const std::string& resp) {
-    if (resp.empty()) return "(nil)";
-    char prefix = resp[0];
-    std::string body = resp.substr(1);
-
-    switch (prefix) {
-        case '+': return body;                 
-        case '-': return "(error) " + body;      
-        case ':': return "(integer) " + body;  
-        case '$': return body == "-1" ? "(nil)" : "\"" + body + "\"";
-        default:  return resp;
+int main(int argc, char* argv[]) {
+    int port = 2006;
+    
+    // Parse arguments for --port
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--port" && i + 1 < argc) {
+            try {
+                port = std::stoi(argv[i + 1]);
+                i++; // skip the port value argument
+            } catch (...) {
+                std::cerr << "[server] Invalid port number '" << argv[i + 1] << "'. Using default: 2006\n";
+                port = 2006;
+            }
+        }
     }
-}
 
-int main() {
     Database db;
     CommandRegistry registry;
 
     registerStringCommands(registry);
     registerListCommands(registry);
 
-    std::cout << "rampage-cli> ";
-    std::string line;
-    while (std::getline(std::cin, line)) {
-        if (line == "exit" || line == "quit") break;
-        if (!line.empty()) {
-            std::string result = registry.execute(db, line);
-            std::cout << prettyPrint(result) << "\n";
-        }
-        std::cout << "rampage-cli> ";
-    }
+    Server server(port);
+    server.start(db, registry);
+
     return 0;
 }
