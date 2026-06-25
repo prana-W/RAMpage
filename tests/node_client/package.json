@@ -5,8 +5,7 @@
   "main": "server_new_conn.js",
   "type": "module",
   "scripts": {
-    "start:new": "node server_new_conn.js",
-    "start:persist": "node server_persistent.js"
+    "start": "node index.js"
   },
   "keywords": [],
   "author": "",

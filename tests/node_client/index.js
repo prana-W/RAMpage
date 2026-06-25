@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3001; // Runs on port 3001 so both can be active at the same time
-const DB_PORT = 2008;
+const DB_PORT = 2006;
 const DB_HOST = '127.0.0.1';
 
 app.use(cors());

@@ -6,6 +6,8 @@
 
 **RAMpage** is a Redis-inspired, high-performance in-memory database server implemented from scratch in C++. It rampages through reads and writes with ultra-low latency, leveraging modern Linux I/O via `epoll`.
 
+> **Note**: Because the application uses `epoll`, which is a Linux native library, the server must be run in a Linux environment.
+
 It comes packaged with a professional-grade **JavaScript SDK** (`rampage-js`) so you can integrate it directly into your Node.js backend seamlessly.
 
 ---
@@ -54,31 +56,27 @@ It comes packaged with a professional-grade **JavaScript SDK** (`rampage-js`) so
 
 ## 🚀 Getting Started
 
-### 1. Build and Run the RAMpage Server
+### 1. Run the RAMpage Server with Docker
 
-Requirements: `cmake`, `make`, and a C++17 compiler (g++ or clang++).
+Since RAMpage utilizes the Linux native `epoll` library, the easiest way to get everything running on any platform is by using Docker.
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/prana-W/RAMpage.git
-cd RAMpage
+# 1. Build the Docker image
+docker build -t rampage-server .
 
-# 2. Build the project
-mkdir build && cd build
-cmake ..
-make
+# 2. Run the Docker container
+# This maps port 2006 on your host to port 2006 in the container
+docker run -p 2006:2006 -d --name rampage-instance rampage-server
 
-# 3. Start the server (defaults to port 2006)
-./rampage
-# Or specify a port: ./rampage --port 3000
+# Or specify a custom port (e.g., 3000):
+# docker run -p 3000:3000 -d --name rampage-instance rampage-server --port 3000
 ```
 
 ### 2. Connect via CLI
 
-In a separate terminal, use the built-in CLI tool to send commands manually:
+In a separate terminal, you can interactively run commands against your Docker instance using the built-in CLI:
 ```bash
-cd build
-./rampage_cli
+docker exec -it rampage-instance /app/rampage_cli
 ```
 ```text
 rampage-cli> set name "Alice"
@@ -90,6 +88,8 @@ rampage-cli> rpush tasks "Email Users"
 ```
 
 ### 3. Use the JavaScript SDK
+
+*(Note: I will later publish the JS-SDK to npm, so that the code can be easily installed via `npm install rampage-js`)*
 
 Add the SDK to your Node.js project:
 
