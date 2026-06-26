@@ -38,8 +38,8 @@ void PersistenceManager::replay(Database& db, CommandRegistry& registry) {
     std::cout << "[persistence] Replaying AOF log: " << filePath_ << " ...\n";
 
     std::string line;
-    int         replayed = 0;
-    int         skipped  = 0;
+    int replayed = 0;
+    int skipped = 0;
 
     while (std::getline(file, line)) {
         if (line.empty())

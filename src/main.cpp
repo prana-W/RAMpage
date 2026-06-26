@@ -8,7 +8,7 @@
 #include "./server/Server.h"
 
 int main(int argc, char* argv[]) {
-    int         port    = 2006;
+    int port = 2006;
     std::string aofPath = "rampage.rampage";
 
     for (int i = 1; i < argc; ++i) {
@@ -28,8 +28,8 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    Database           db;
-    CommandRegistry    registry;
+    Database db;
+    CommandRegistry registry;
     PersistenceManager pm(aofPath);
 
     registerStringCommands(registry);

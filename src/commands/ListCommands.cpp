@@ -110,7 +110,7 @@ void registerListCommands(CommandRegistry& reg) {
         long long start = 0, stop = 0;
         try {
             start = std::stoll(args[1]);
-            stop  = std::stoll(args[2]);
+            stop = std::stoll(args[2]);
         } catch (...) {
             return "ERR:start and stop must be integers";
         }

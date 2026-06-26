@@ -18,8 +18,8 @@ void CommandRegistry::setPersistenceManager(PersistenceManager* pm) {
 
 static std::vector<std::string> tokenize(const std::string& line) {
     std::vector<std::string> tokens;
-    std::string              current_token;
-    bool                     in_quotes = false;
+    std::string current_token;
+    bool in_quotes = false;
 
     for (size_t i = 0; i < line.length(); ++i) {
         char c = line[i];
@@ -56,7 +56,7 @@ static long long nowMs() {
         .count();
 }
 
-void CommandRegistry::logIfWriteCommand(const std::string&              cmdName,
+void CommandRegistry::logIfWriteCommand(const std::string& cmdName,
                                         const std::vector<std::string>& tokens) {
     // Read-only commands — never log these
     static const std::set<std::string> WRITE_CMDS = {
@@ -70,7 +70,7 @@ void CommandRegistry::logIfWriteCommand(const std::string&              cmdName,
     // ---- EXPIRE key ttlSec  →  EXPIRYAT key epochMs ----
     if (cmdName == "EXPIRE" && tokens.size() >= 3) {
         try {
-            long long ttlMs   = std::stoll(tokens[2]) * 1000;
+            long long ttlMs = std::stoll(tokens[2]) * 1000;
             long long epochMs = nowMs() + ttlMs;
             pm_->logCommand("EXPIRYAT " + quoteIfNeeded(tokens[1]) + " " + std::to_string(epochMs));
         } catch (...) { /* malformed — skip logging */
@@ -82,7 +82,7 @@ void CommandRegistry::logIfWriteCommand(const std::string&              cmdName,
     // tokens: [CMD, key, val, ttlSec?]
     if ((cmdName == "SET" || cmdName == "LPUSH" || cmdName == "RPUSH") && tokens.size() >= 4) {
         try {
-            long long ttlMs   = std::stoll(tokens[3]) * 1000;
+            long long ttlMs = std::stoll(tokens[3]) * 1000;
             long long epochMs = nowMs() + ttlMs;
 
             // 1. Log the base command without TTL (creates/updates the key/value)
@@ -118,7 +118,7 @@ std::string CommandRegistry::execute(Database& db, const std::string& rawLine) {
     }
 
     std::vector<std::string> args(tokens.begin() + 1, tokens.end());
-    std::string              result = it->second(db, args);
+    std::string result = it->second(db, args);
 
     // Persist only if: persistence is wired up, command succeeded, and it is a write command
     if (pm_ && result.size() >= 5 && result.substr(0, 5) == "SUCC:") {

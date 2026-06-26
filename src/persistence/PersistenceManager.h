@@ -19,12 +19,12 @@ class PersistenceManager {
     void replay(Database& db, CommandRegistry& registry);
 
    private:
-    std::string             filePath_;
+    std::string filePath_;
     std::queue<std::string> queue_;
-    std::mutex              mutex_;
+    std::mutex mutex_;
     std::condition_variable cv_;
-    std::atomic<bool>       shutdown_{false};
-    std::thread             flusherThread_;
+    std::atomic<bool> shutdown_{false};
+    std::thread flusherThread_;
 
     // Entry point for the background flusher thread
     void flusherLoop();

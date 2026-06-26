@@ -2,7 +2,6 @@
 
 - Add more data type supports like hash, sets etc
 - Check TCP readiness. Send byte by byte data slowly and check if everything is working. 
-- Persistent storage 
 - Pub/Sub
 - Understand more about single threaded epoll, event loop
 - LRU/LFU implementation
@@ -11,3 +10,4 @@
 - Statistics and comparision and tests
 - Sharding/consistent hashing
 - Crash recovery testing
+- Rewriting of log files to remove unnecessary commands 

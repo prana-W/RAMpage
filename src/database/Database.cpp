@@ -21,7 +21,7 @@ bool Database::checkAndExpire(const std::string &key) {
 
 Response Database::set(const std::string &key, const std::string &value, long long ttlMs) {
     long long expiry = (ttlMs == -1) ? -1 : getCurrentTimeMs() + ttlMs;
-    data[key]        = {value, expiry};
+    data[key] = {value, expiry};
     return {Status::OK, "Key set successfully", std::monostate{}};
 }
 
@@ -214,7 +214,7 @@ Response Database::lindex(const std::string &key, long long index) {
 
     auto &entry = data[key];
     if (std::holds_alternative<std::deque<std::string>>(entry.value)) {
-        auto     &deq  = std::get<std::deque<std::string>>(entry.value);
+        auto &deq = std::get<std::deque<std::string>>(entry.value);
         long long size = deq.size();
         if (index < 0)
             index += size;
@@ -233,7 +233,7 @@ Response Database::lset(const std::string &key, long long index, const std::stri
 
     auto &entry = data[key];
     if (std::holds_alternative<std::deque<std::string>>(entry.value)) {
-        auto     &deq  = std::get<std::deque<std::string>>(entry.value);
+        auto &deq = std::get<std::deque<std::string>>(entry.value);
         long long size = deq.size();
         if (index < 0)
             index += size;
@@ -253,7 +253,7 @@ Response Database::lrange(const std::string &key, long long start, long long sto
 
     auto &entry = data[key];
     if (std::holds_alternative<std::deque<std::string>>(entry.value)) {
-        auto     &deq  = std::get<std::deque<std::string>>(entry.value);
+        auto &deq = std::get<std::deque<std::string>>(entry.value);
         long long size = deq.size();
 
         if (start < 0)

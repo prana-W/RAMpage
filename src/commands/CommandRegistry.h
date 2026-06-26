@@ -21,7 +21,7 @@ class CommandRegistry {
     void logIfWriteCommand(const std::string& cmdName, const std::vector<std::string>& tokens);
 
    public:
-    void        registerCommand(const std::string& name, CommandHandler fn);
+    void registerCommand(const std::string& name, CommandHandler fn);
     std::string execute(Database& db, const std::string& rawLine);
 
     // Wire up persistence. Call this AFTER replay() so replayed commands

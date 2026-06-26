@@ -31,8 +31,8 @@ std::string prettyPrint(const std::string& resp) {
         // Pipe-separated list (LRANGE) → show numbered like Redis CLI
         if (payload.find('|') != std::string::npos) {
             std::string out;
-            int         idx = 1;
-            size_t      pos = 0, found;
+            int idx = 1;
+            size_t pos = 0, found;
             while ((found = payload.find('|', pos)) != std::string::npos) {
                 out += std::to_string(idx++) + ") \"" + payload.substr(pos, found - pos) + "\"\n";
                 pos = found + 1;
@@ -53,7 +53,7 @@ std::string prettyPrint(const std::string& resp) {
 }
 
 int main() {
-    Database        db;
+    Database db;
     CommandRegistry registry;
 
     registerStringCommands(registry);

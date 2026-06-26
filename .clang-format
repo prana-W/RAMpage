@@ -4,9 +4,14 @@ ColumnLimit: 100
 AllowShortIfStatementsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: false
 SortIncludes: true
-AlignConsecutiveAssignments: true
-AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
 PointerAlignment: Left
 ReflowComments: true
 TabWidth: 4
 UseTab: Never
+IncludeBlocks: Preserve
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+EmptyLineBeforeAccessModifier: LogicalBlock
+Standard: Latest

@@ -44,9 +44,9 @@ bool Server::setupSocket() {
     fcntl(serverFd, F_SETFL, flags | O_NONBLOCK);
 
     sockaddr_in addr{};
-    addr.sin_family      = AF_INET;
+    addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port        = htons(static_cast<uint16_t>(port));
+    addr.sin_port = htons(static_cast<uint16_t>(port));
 
     if (bind(serverFd, (sockaddr*)&addr, sizeof(addr)) < 0) {
         std::cerr << "[server] Failed to bind to port " << port << "\n";
@@ -63,7 +63,7 @@ bool Server::setupSocket() {
 
 bool Server::addToEpoll(int fd) {
     epoll_event ev{};
-    ev.events  = EPOLLIN;  // notify when fd is ready to read
+    ev.events = EPOLLIN;  // notify when fd is ready to read
     ev.data.fd = fd;
     return epoll_ctl(epollFd, EPOLL_CTL_ADD, fd, &ev) == 0;
 }
@@ -142,8 +142,8 @@ void Server::start(Database& db, CommandRegistry& registry) {
             if (fd == serverFd) {
                 // --- New client connecting ---
                 sockaddr_in clientAddr{};
-                socklen_t   clientLen = sizeof(clientAddr);
-                int         clientFd  = accept(serverFd, (sockaddr*)&clientAddr, &clientLen);
+                socklen_t clientLen = sizeof(clientAddr);
+                int clientFd = accept(serverFd, (sockaddr*)&clientAddr, &clientLen);
                 if (clientFd < 0)
                     continue;
 
@@ -159,7 +159,7 @@ void Server::start(Database& db, CommandRegistry& registry) {
 
             } else {
                 // --- Existing client sent data ---
-                char    rawBuf[4096];
+                char rawBuf[4096];
                 ssize_t bytesRead = recv(fd, rawBuf, sizeof(rawBuf) - 1, 0);
 
                 if (bytesRead <= 0) {

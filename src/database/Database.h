@@ -10,7 +10,7 @@
 
 struct DbEntry {
     std::variant<std::string, std::deque<std::string>> value;
-    long long                                          expiryTimeMs = -1;  // -1 means no expiry
+    long long expiryTimeMs = -1;  // -1 means no expiry
 };
 
 class Database {
