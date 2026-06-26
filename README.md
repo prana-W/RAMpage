@@ -6,8 +6,6 @@
 
 **RAMpage** is a Redis-inspired, high-performance in-memory database server implemented from scratch in C++. It rampages through reads and writes with ultra-low latency, leveraging modern Linux I/O via `epoll`.
 
-> **Note**: Because the application uses `epoll`, which is a Linux native library, the server must be run in a Linux environment.
-
 It comes packaged with a professional-grade **JavaScript SDK** (`rampage-js`) so you can integrate it directly into your Node.js backend seamlessly.
 
 ---
@@ -19,6 +17,7 @@ It comes packaged with a professional-grade **JavaScript SDK** (`rampage-js`) so
 - **Robust Custom Protocol**: A streamlined text protocol where every response is either `SUCC:<payload>` or `ERR:<message>`.
 - **String & List Operations**: Full support for Redis-like primitives (`SET`, `GET`, `DEL`, `LPUSH`, `RPOP`, `LRANGE`, etc.).
 - **TTL & Expiry**: Native support for key expiration (`EXPIRE`, `TTL`) automatically managed by the database.
+- **Persistence (AOF)**: All write commands are automatically persisted to an Append-Only File (`rampage.rampage`). On server restart, the log is fully replayed to restore in-memory state — no data loss.
 - **Interactive CLI**: Comes with a `rampage-cli` tool to interactively run commands against the server.
 
 ### The JavaScript SDK (`rampage-js`)
@@ -34,17 +33,17 @@ It comes packaged with a professional-grade **JavaScript SDK** (`rampage-js`) so
 ## 🛠️ Commands Supported
 
 **Strings**:
-- `SET <key> <value> [ttl_ms]`
+- `SET <key> <value> [ttl_seconds]`
 - `GET <key>`
 - `DEL <key>`
 - `TTL <key>`
-- `EXPIRE <key> <ttl_ms>`
+- `EXPIRE <key> <ttl_seconds>`
 - `APPEND <key> <value>`
 - `STRLEN <key>`
 
 **Lists**:
-- `LPUSH <key> <value> [ttl_ms]`
-- `RPUSH <key> <value> [ttl_ms]`
+- `LPUSH <key> <value> [ttl_seconds]`
+- `RPUSH <key> <value> [ttl_seconds]`
 - `LPOP <key>`
 - `RPOP <key>`
 - `LLEN <key>`
@@ -106,7 +105,7 @@ async function main() {
 
   // 3. Perform operations
   await client.set('user', 'Alice', { ttl: 10000 }); // Expires in 10s
-  
+
   const user = await client.get('user');
   console.log(`Hello, ${user}!`);
 
@@ -129,6 +128,32 @@ main();
   - `server/` — Contains the `epoll` TCP server.
   - `database/` — The in-memory data structures and logic.
   - `commands/` — Handlers bridging raw strings to the `Database` methods.
+  - `persistence/` — The `PersistenceManager` handling AOF logging and replay.
 - **`sdk/rampage-js/`** — The Node.js client package.
 - **`tests/`** — Server tests and Node.js testing playground.
 - **`docs/`** — Internal design notes.
+
+---
+
+## 🔬 Under the Hood
+
+A collection of deliberate engineering decisions that make RAMpage reliable and efficient.
+
+### Single-Threaded Epoll — Zero Lock Contention on the Database
+
+Instead of spawning one OS thread per client (which would require mutexes around every database read/write), RAMpage uses a single main thread with Linux `epoll`. The event loop wakes up only when a client socket has data ready, processes it fully, and goes back to waiting. Because only one thread ever touches the database, there are **zero race conditions on data** — no mutexes, no deadlocks, no lock contention. This is the same architectural choice Redis makes.
+
+### Append-Only File Persistence — Surviving Crashes and Restarts
+
+Every successful write command (`SET`, `DEL`, `LPUSH`, `EXPIRE`, etc.) is logged to `rampage.rampage` before the response is sent. On restart, the server replays the entire log to restore state before accepting any client commands.
+
+**TTL correctness across restarts**: When a key is set with a TTL (e.g. `SET foo bar 60`), naively replaying `SET foo bar 60` on restart would reset the TTL back to 60 seconds — the key would live longer than originally intended. To fix this, the persistence layer rewrites TTL commands to store the **absolute expiry epoch** instead of a relative duration. `SET foo bar 60` is logged as `SET foo bar` + `EXPIRYAT foo <unix_epoch_ms>`. On replay, `EXPIRYAT` sets the exact same deadline regardless of how much time has passed since the original command ran.
+
+### Non-Blocking AOF Writes — Producer/Consumer with Lock-Minimized Swap
+
+Writing to disk on every command in the main thread would stall client responses. RAMpage solves this with a **background flusher thread**:
+
+- **Producer** (main epoll thread): after a successful write command, pushes the log entry into an in-memory `std::queue` and immediately continues handling the next client — no disk I/O on the hot path.
+- **Consumer** (background flusher thread): sleeps on a `std::condition_variable` until entries appear, then **atomically swaps** the entire shared queue into a local queue (holding the mutex for ~1 nanosecond), releases the lock, and writes to disk at its own pace.
+
+The key insight is the **swap trick**: the mutex is held only for a pointer swap, not for any file I/O. The main thread is almost never blocked. This eliminates the producer/consumer race condition (`std::queue` is not thread-safe) while keeping disk writes completely off the hot path.
