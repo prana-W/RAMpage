@@ -87,4 +87,20 @@ void registerStringCommands(CommandRegistry& reg) {
         }
         return "ERR:" + res.message;
     });
+
+    reg.registerCommand("EXPIRYAT",
+                        [](Database& db, std::vector<std::string>& args) -> std::string {
+                            if (args.size() < 2)
+                                return "ERR:wrong number of arguments for 'expiryat'";
+                            long long epochMs = 0;
+                            try {
+                                epochMs = std::stoll(args[1]);
+                            } catch (...) {
+                                return "ERR:epochMs must be an integer";
+                            }
+                            Response res = db.expireAt(args[0], epochMs);
+                            if (res.status == Status::OK)
+                                return "SUCC:";
+                            return "ERR:" + res.message;
+                        });
 }
