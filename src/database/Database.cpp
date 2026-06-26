@@ -99,6 +99,14 @@ Response Database::expire(const std::string &key, long long ttlMs) {
     return {Status::OK, "Expiry set", std::monostate{}};
 }
 
+Response Database::expireAt(const std::string &key, long long epochMs) {
+    if (!checkAndExpire(key))
+        return {Status::KEY_NOT_FOUND, "Key not found", std::monostate{}};
+
+    data[key].expiryTimeMs = epochMs;
+    return {Status::OK, "Expiry set (absolute)", std::monostate{}};
+}
+
 // Lists
 Response Database::lpush(const std::string &key, const std::string &value, long long ttlMs) {
     long long expiry = (ttlMs == -1) ? -1 : getCurrentTimeMs() + ttlMs;

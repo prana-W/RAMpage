@@ -34,6 +34,7 @@ class Database {
     Response strlen(const std::string &key);
     Response ttl(const std::string &key);
     Response expire(const std::string &key, long long ttlMs);
+    Response expireAt(const std::string &key, long long epochMs);
 
     // Lists
     Response lpush(const std::string &key, const std::string &value, long long ttlMs = -1);
