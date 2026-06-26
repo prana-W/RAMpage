@@ -73,3 +73,157 @@ This architecture makes it incredibly easy to add new features. If you wanted to
 - Other error handling like number handling, no key handling, ERR, SUCC handling is done
 - We have Auto reconnect, exponential backoff, event emitter (connect, error, close, reconnecting), in-flight draining in RampageConnection Class
 - Implementing a custom Rampage Error class for handling specific errors
+
+# Phase - 6 (Persistence)
+
+- When user sends any command, it is first executed, then only if it is related to write/update/del and only after the command is successull, we are adding the exact command in our buffer, also for ttl we are putting the final expiray time using epoch_time in the buffer
+
+- Due to this the main-thread is never blocked, all we have to do is just log the command in buffer (in-memory)
+
+- Meanwhile a background thread, take commands out of the queue and writes them to a file as it is
+
+- When the db server is restarted, we keep on accpeting client's connection but first replay the entire log files commands one-by-one to repopulate the db, also if expiry time is less than current time, we don't log at all, else we log with the exact final expiry time. Also this is a blocking code, this is to avoid race coniditions/stale data. So users command will not be executed until and unless the entire repopulation is done. 
+
+- As of now the log files keep growing indefinitely and also might contain usless commands it in as well, for example if we have `set foo one` and later `set foo two`, then the first command is useless and is taking our space in disk, but we will optimise it later and not now. Also expired data's command will still be present in the log file, which will again be optimsie in the future.
+
+## Producer - Consumer Problem (Context: `src/persistence/PersistenceManager.h` / `.cpp`)
+
+The relevant files here are `PersistenceManager.h` (class declaration), `PersistenceManager.cpp` (implementation), and `CommandRegistry.cpp` (where `logCommand` is actually called from).
+
+### The Setup
+
+After `server.start()` is called in `main.cpp`, we have exactly two threads running at the same time:
+
+1. **Main epoll thread** (the producer) — this is the same single thread that runs the entire event loop. When a client sends a write command like `SET foo bar`, the epoll thread executes it, and then calls `CommandRegistry::logIfWriteCommand()` → which calls `PersistenceManager::logCommand()` → which pushes the command string into `queue_` (a `std::queue<std::string>` member variable inside `PersistenceManager`).
+
+2. **Background flusher thread** (the consumer) — this is spawned in the `PersistenceManager` constructor: `flusherThread_(&PersistenceManager::flusherLoop, this)`. It runs `flusherLoop()` in a loop forever, waking up whenever `queue_` has something in it, draining it, and writing it to `rampage.rampage`.
+
+Both threads share the **same single `queue_`** object — it's a member variable of the one `PersistenceManager` instance that lives in `main.cpp`. Both threads have access to `this`, so they both see and touch the exact same memory. This is the classic producer-consumer setup.
+
+---
+
+### Why this is a Problem
+
+`std::queue` is not thread-safe. Internally, it's a wrapper around a `std::deque`, which stores its data across multiple memory chunks with a bunch of internal bookkeeping pointers ("where does the front start", "where does the back end", "how many elements are there", etc.).
+
+When you call `queue_.push(entry)`, that is NOT a single CPU instruction. It's several steps: allocate space, write the data, update the back pointer, increment the size counter. If the main thread is **halfway through** those steps — say, it's written the data but hasn't updated the size counter yet — and the flusher thread wakes up at that exact nanosecond and calls `std::swap(localQueue, queue_)`, it is going to read an internally inconsistent queue. The item might appear to not exist, or the internal pointers might be pointing into garbage. This is undefined behaviour in C++ — meaning it might crash, it might silently corrupt data, or it might work fine 10,000 times and blow up on the 10,001st depending on how the OS scheduled the threads that particular run.
+
+This is the **race condition** — the outcome of the program depends on which thread "wins the race" to the memory at any given nanosecond, which is something you have absolutely zero control over.
+
+---
+
+### Problem 1: Race Condition on `queue_`
+
+**Where it happens:** Inside `PersistenceManager::logCommand()` (main thread pushing) and `PersistenceManager::flusherLoop()` (flusher thread swapping/reading) — both touch the same `queue_` member variable simultaneously.
+
+**Fix: `std::mutex mutex_` + `std::lock_guard`**
+
+A mutex (mutual exclusion lock) is a primitive that guarantees only one thread can be inside a protected section at a time. If thread A holds the lock, thread B hitting the same lock just blocks — it pauses and waits — until A releases it. No racing possible.
+
+In `logCommand()`:
+```cpp
+void PersistenceManager::logCommand(const std::string& entry) {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);  // acquire lock
+        queue_.push(entry);                        // touch queue_ safely
+    }                                              // lock_guard destructor releases lock here
+    cv_.notify_one();
+}
+```
+
+In `flusherLoop()`:
+```cpp
+std::unique_lock<std::mutex> lock(mutex_);
+cv_.wait(lock, [this] { return !queue_.empty() || shutdown_.load(); });
+std::swap(localQueue, queue_);   // touch queue_ safely — we hold the lock
+// lock released when unique_lock goes out of scope
+```
+
+`std::lock_guard` is a RAII wrapper — the moment the `{ }` block ends, it automatically releases the lock even if an exception is thrown. You never have to manually call `unlock()` and risk forgetting it.
+
+Now no matter what the OS scheduler does, the two threads can never be inside those `{ }` blocks at the same time. Race condition eliminated.
+
+---
+
+### Problem 2: Busy-Waiting (CPU Spinning)
+
+Even after fixing the race condition with a mutex, there's a second problem. Most of the time, the `queue_` is empty — the flusher has nothing to do. The naive approach would be:
+
+```cpp
+// BAD: busy-waiting
+while (true) {
+    lock(mutex_);
+    if (!queue_.empty()) { /* drain it */ }
+    unlock(mutex_);
+    // loop immediately and check again
+}
+```
+
+This is called **busy-waiting** — the flusher thread is just spinning in a loop, constantly locking, checking, unlocking, and repeating millions of times per second even when there is literally nothing to do. It doesn't corrupt data, but it pegs an entire CPU core at 100% usage for no reason. On a multi-core machine you'd be wasting one full core just doing nothing useful.
+
+**Fix: `std::condition_variable cv_`**
+
+A condition variable lets a thread go genuinely to sleep — consuming zero CPU — and only wake up when another thread explicitly signals it. Think of it as a doorbell. Instead of the flusher standing at the counter checking every millisecond, it sits down and waits. The main thread rings the bell (`cv_.notify_one()`) the instant it pushes something, and only then does the flusher wake up.
+
+In `flusherLoop()`:
+```cpp
+std::unique_lock<std::mutex> lock(mutex_);
+cv_.wait(lock, [this] { return !queue_.empty() || shutdown_.load(); });
+```
+
+`cv_.wait()` does three things atomically:
+1. Releases the mutex (so the main thread can push to `queue_` while the flusher is sleeping)
+2. Puts the flusher thread fully to sleep (zero CPU)
+3. When `cv_.notify_one()` is called from `logCommand()`, it re-acquires the mutex and wakes up
+
+The lambda `[this] { return !queue_.empty() || shutdown_.load(); }` is a guard against **spurious wakeups** — a known quirk of condition variables where the OS can occasionally wake a thread up for no reason. The lambda makes the thread check the actual condition and go back to sleep if it was a false alarm.
+
+In `logCommand()`:
+```cpp
+cv_.notify_one();  // ring the doorbell — wake up the flusher
+```
+
+This is called AFTER releasing the mutex (after the `{ }` block), so the flusher can immediately acquire the lock when it wakes up.
+
+---
+
+### Problem 3: Holding the Lock During File I/O (Blocking the Main Thread)
+
+Even with the mutex and condition variable in place, there's a third subtle problem. If the flusher thread held the mutex for the entire duration of writing to disk — which can take microseconds to milliseconds — then every time the main thread tried to call `logCommand()`, it would block and wait for the disk write to finish. That defeats the whole point of having a background thread.
+
+**Fix: `localQueue` — drain first, write later**
+
+The trick is to separate "touching the shared queue" (which must be under lock) from "writing to disk" (which doesn't need the lock at all, since it's purely local):
+
+```cpp
+// In flusherLoop():
+std::queue<std::string> localQueue;   // local to this thread, nobody else sees it
+{
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [...]);
+    std::swap(localQueue, queue_);    // steal everything from shared queue in one O(1) swap
+}                                     // lock released here — main thread unblocked immediately
+
+// Now write to disk with ZERO lock held
+while (!localQueue.empty()) {
+    file << localQueue.front() << "\n";
+    localQueue.pop();
+}
+file.flush();
+```
+
+`std::swap` on two `std::queue` objects is an O(1) pointer swap — it just exchanges the internal pointers of the two queues, not the actual data. So the lock is held for a nanosecond (just the swap), then released immediately. The main thread is unblocked the instant the swap is done. The actual slow file I/O happens entirely outside the lock, using `localQueue` which is a purely local variable that only the flusher thread can see.
+
+Result: the main thread is almost never blocked. The flusher does all its slow work privately. This is why the design is non-blocking.
+
+---
+
+### Summary of all three problems and fixes
+
+| Problem | Where it happens | Fix | In our code |
+|---|---|---|---|
+| Race condition on `queue_` | `logCommand()` + `flusherLoop()` both touching `queue_` | `std::mutex mutex_` + `std::lock_guard` / `std::unique_lock` | `PersistenceManager.h` declares `mutex_`, both functions lock before touching `queue_` |
+| Busy-waiting (CPU spinning) | Flusher checking queue in a loop when it's empty | `std::condition_variable cv_` — flusher sleeps, main rings bell | `cv_.wait()` in `flusherLoop()`, `cv_.notify_one()` in `logCommand()` |
+| Holding lock during disk I/O | Would block main thread for every write | `localQueue` — swap under lock, write outside lock | `std::swap(localQueue, queue_)` inside `{ }`, `file <<` outside `{ }` in `flusherLoop()` |
+
+The final result: the main epoll thread calls `logCommand()`, holds the mutex for ~1 nanosecond to push to the queue, notifies the flusher, and immediately continues handling the next client event. The flusher wakes up, steals the queue contents in one swap, releases the lock, and writes to disk on its own time. Both threads are fully independent after the swap.
