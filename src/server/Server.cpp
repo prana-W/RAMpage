@@ -12,7 +12,11 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstring>
+
+#include "../protocol/RESPParser.h"
+#include "../protocol/RESPSerializer.h"
 
 static const int MAX_EVENTS = 64;
 
@@ -74,30 +78,49 @@ void Server::removeClient(int clientFd) {
     std::cout << "[server] Client disconnected (fd=" << clientFd << ")\n";
 }
 
+
 void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db,
                                  CommandRegistry& registry) {
-    // Process all complete lines (commands) in the buffer
-    size_t pos;
-    while ((pos = buffer.find('\n')) != std::string::npos) {
-        std::string command = buffer.substr(0, pos);
-        buffer.erase(0, pos + 1);  // consume the processed command from the buffer
+    while (true) {
+        ParsedCommand cmd;
+        ParseResult pr = RESPParser::parse(buffer, cmd);
 
-        // Strip any trailing carriage return (for Windows clients like telnet)
-        if (!command.empty() && command.back() == '\r') {
-            command.pop_back();
+        if (pr == ParseResult::INCOMPLETE) {
+            break;  // wait for more data
         }
 
-        if (command.empty())
-            continue;
-        if (command == "exit" || command == "quit") {
+        if (pr == ParseResult::ERROR) {
+            // Skip empty inline lines silently; close on real protocol errors
+            if (buffer.empty())
+                break;
+            std::string errResp = RESPSerializer::errorMsg("Protocol error");
+            send(clientFd, errResp.c_str(), errResp.size(), 0);
             removeClient(clientFd);
             return;
         }
 
-        // Execute the command (single-threaded: no mutex needed!)
-        std::string result = registry.execute(db, command);
-        result += "\n";
-        send(clientFd, result.c_str(), result.length(), 0);
+        // ParseResult::OK — we have a full, parsed command
+        if (cmd.args.empty())
+            continue;
+
+        // Upper-case the command name for dispatch + serializer lookup
+        std::string cmdName = cmd.args[0];
+        std::transform(cmdName.begin(), cmdName.end(), cmdName.begin(), ::toupper);
+
+        // QUIT / EXIT — send +OK and close gracefully (Redis behavior)
+        if (cmdName == "QUIT" || cmdName == "EXIT") {
+            std::string resp = RESPSerializer::simpleString("OK");
+            send(clientFd, resp.c_str(), resp.size(), 0);
+            removeClient(clientFd);
+            return;
+        }
+
+        // Dispatch through the command registry
+        std::string internalResult = registry.execute(db, cmd.args);
+
+        // Serialize the internal result to RESP wire format
+        std::string resp = RESPSerializer::serialize(internalResult, cmdName);
+        send(clientFd, resp.c_str(), resp.size(), 0);
     }
 }
 
@@ -120,9 +143,9 @@ void Server::start(Database& db, CommandRegistry& registry) {
         return;
     }
 
-    std::cout << "[server] RAMpage server listening on port " << port << " ...\n";
+    std::cout << "[server] RAMpage server listening on port " << port << " (RESP protocol) ...\n";
 
-    // Per-client input buffers: accumulates bytes until a full command (newline) arrives
+    // Per-client input buffers: accumulates bytes until a full RESP frame arrives
     std::unordered_map<int, std::string> clientBuffers;
 
     epoll_event events[MAX_EVENTS];
@@ -169,12 +192,10 @@ void Server::start(Database& db, CommandRegistry& registry) {
                     continue;
                 }
 
-                rawBuf[bytesRead] = '\0';
-
                 // Append new bytes to this client's personal buffer
-                clientBuffers[fd] += std::string(rawBuf, bytesRead);
+                clientBuffers[fd].append(rawBuf, static_cast<size_t>(bytesRead));
 
-                // Process any complete commands (lines) in this client's buffer
+                // Process any complete RESP commands in this client's buffer
                 processClientBuffer(fd, clientBuffers[fd], db, registry);
             }
         }

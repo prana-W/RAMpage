@@ -35,6 +35,8 @@ add_library(RAMpageCore
     src/commands/ListCommands.cpp
     src/server/Server.cpp
     src/persistence/PersistenceManager.cpp
+    src/protocol/RESPParser.cpp
+    src/protocol/RESPSerializer.cpp
 )
 
 find_package(Threads REQUIRED)

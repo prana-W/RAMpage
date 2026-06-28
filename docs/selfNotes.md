@@ -227,3 +227,62 @@ Result: the main thread is almost never blocked. The flusher does all its slow w
 | Holding lock during disk I/O | Would block main thread for every write | `localQueue` — swap under lock, write outside lock | `std::swap(localQueue, queue_)` inside `{ }`, `file <<` outside `{ }` in `flusherLoop()` |
 
 The final result: the main epoll thread calls `logCommand()`, holds the mutex for ~1 nanosecond to push to the queue, notifies the flusher, and immediately continues handling the next client event. The flusher wakes up, steals the queue contents in one swap, releases the lock, and writes to disk on its own time. Both threads are fully independent after the swap.
+
+# Phase - 7: REdis Serialization Protocol (RESP) Layer
+
+## What is RESP and Why Did We Add It?
+RESP (REdis Serialization Protocol) is the networking protocol used by Redis to communicate between clients and the server. It defines how data (strings, integers, arrays, errors) should be formatted when sent over a TCP socket.
+
+**Why we added it:**
+Before this phase, RAMpage used a naive newline-separated protocol (`GET foo\n`). While simple to build, it meant we couldn't use standard Redis tools. By implementing RESP, RAMpage is now a "Redis-compatible" server. We can:
+- Use `redis-cli` to interact with our database natively.
+- Use `redis-benchmark` to test our server's performance under heavy load.
+- Use any standard Redis client library (in Node.js, Python, Go, etc.) to connect to RAMpage.
+
+## The Architecture Change
+
+**Old Architecture:**
+```
+TCP bytes → newline-split → tokenize (space/quotes) → CommandRegistry::execute() → "SUCC:/ERR:" string → TCP send
+```
+
+**New Architecture:**
+```
+TCP bytes → RESPParser (handles pipelining/partial frames) → vector<string> tokens → CommandRegistry::execute() → RESPSerializer → TCP send
+```
+*Crucially, our internal command handlers (`Database.cpp`, `StringCommands.cpp`, etc.) were **not changed**. They still return internal strings like `"SUCC:1"` or `"SUCC:PONG"`. The RESP layer acts as an adapter, translating incoming RESP bytes to tokens, and outgoing internal strings to RESP bytes.*
+
+## How We Implemented It (File by File)
+
+### 1. `src/protocol/RESPParser.h & .cpp`
+This is a stateless parser that takes the raw incoming byte buffer from a client and extracts a command.
+- **Array Parsing:** It understands standard RESP arrays like `*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nbar\r\n`.
+- **Inline Fallback:** Tools like `telnet` and sometimes `redis-cli` (for simple commands like `PING`) send "inline" commands without the `*` or `$`. The parser detects this and falls back to space-separated tokenization.
+- **Partial Frame Buffering:** If `recv()` only gives us half a packet (e.g., `*3\r\n$3\r\nSE`), the parser returns `INCOMPLETE`. The server leaves the buffer alone and waits for the next `recv()` to complete it.
+
+### 2. `src/protocol/RESPSerializer.h & .cpp`
+This class translates our internal `SUCC:/ERR:` formats into RESP wire types.
+- **Response Mapping:** It looks at the command name to know how to format the data.
+  - `SUCC:` (empty) for a `GET` means the key is missing → `$-1\r\n` (Null Bulk String).
+  - `SUCC:` (empty) for a `SET` means success → `+OK\r\n` (Simple String).
+  - `SUCC:1` for `DEL` means an integer return → `:1\r\n` (Integer).
+  - `SUCC:a|b` for `LRANGE` means an array return → `*2\r\n$1\r\na\r\n$1\r\nb\r\n` (Array).
+  - `ERR:message` → `-ERR message\r\n` (Error).
+
+### 3. `src/server/Server.cpp` (The Pipeline Loop)
+We completely rewrote `processClientBuffer`.
+- **Greedy Pipelining:** Tools like `redis-benchmark` send hundreds of commands in a single TCP write. Our new `Server` uses a `while(true)` loop to greedily parse and execute as many complete RESP commands as possible from the client's buffer before returning to `epoll_wait`.
+
+### 4. `src/commands/CommandRegistry.cpp`
+- Added an overloaded `execute(Database& db, std::vector<std::string>& tokens)` method. Since the `RESPParser` already tokenizes the incoming command, we bypass the old `tokenize()` step entirely for network clients, saving CPU cycles.
+- Modified the AOF logging logic for `DEL` to only log if the key was *actually* deleted (i.e., when `DEL` returns `SUCC:1`).
+
+### 5. `src/commands/*Commands.cpp`
+We updated the command handlers slightly to match Redis semantics perfectly:
+- Added a `PING` command (returns `SUCC:PONG`), which is the first thing `redis-cli` and `redis-benchmark` send to check if the server is alive.
+- Modified `DEL` and `EXPIRE` to return `SUCC:1` or `SUCC:0` (integers) instead of void success, matching Redis.
+- Modified `GET`, `LPOP`, `RPOP`, and `LINDEX` to return `SUCC:` (which maps to a Null Bulk String) on a cache miss, instead of throwing an `ERR:` message.
+
+### Summary
+By cleanly separating the networking protocol (RESP) from the database logic, we made RAMpage highly compatible with industry-standard tools without rewriting the core engine!
+
