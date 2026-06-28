@@ -10,6 +10,36 @@ It comes packaged with a professional-grade **Node.js SDK** (`rampage-node`) so 
 
 ---
 
+## 📊 Benchmark Results
+
+Benchmarks run using `redis-benchmark` with 100,000 requests per command on the same machine, comparing RAMpage head-to-head against a real Redis server.
+
+```bash
+redis-benchmark -p <port> -t ping,set,get,lpush,lpop,rpush,rpop,lrange -n 100000 -q
+```
+
+RAMpage is **competitive on core key-value operations** (SET/GET) and even **beats Redis on GET latency**. The main gap appears in `LRANGE` (large list serialization) and `PING_INLINE` (plain-text parsing), which are known optimization targets for future work.
+
+| Command | Redis (req/s) | RAMpage (req/s) | Redis p50 (ms) | RAMpage p50 (ms) | Verdict |
+|---|---|---|---|---|---|
+| PING_INLINE | 57,241 | 2,433 | 0.767 | 20.799 | Redis **23x faster** |
+| PING_MBULK | 63,492 | 82,034 | 0.567 | 0.335 | RAMpage **1.3x faster** |
+| SET | 68,729 | 51,046 | 0.615 | 0.871 | Redis ~1.35x faster |
+| GET | 71,276 | 64,767 | 0.543 | 0.159 | Comparable throughput, RAMpage **lower latency** |
+| LPUSH | 59,067 | 51,387 | 0.647 | 0.815 | Redis ~1.15x faster |
+| RPUSH | 75,415 | 49,850 | 0.567 | 0.919 | Redis ~1.5x faster |
+| LPOP | 75,472 | 53,908 | 0.567 | 0.759 | Redis ~1.4x faster |
+| RPOP | 75,586 | 48,780 | 0.583 | 0.503 | Throughput: Redis wins. Latency: RAMpage wins |
+| LRANGE_100 | 52,910 | 5,440 | 0.511 | 8.791 | Redis **~10x faster** |
+| LRANGE_300 | 29,525 | 2,387 | 0.831 | 19.519 | Redis **~12x faster** |
+| LRANGE_500 | 21,650 | 1,598 | 1.143 | 30.399 | Redis **~13.5x faster** |
+| LRANGE_600 | 19,478 | 1,237 | 1.263 | 38.943 | Redis **~15.7x faster** |
+
+> [!NOTE]
+> **PING_INLINE** and **LRANGE** gaps are expected: PING_INLINE uses a plain-text format that requires a fallback parsing path, and LRANGE involves serializing large lists into RESP arrays — both are areas targeted for future optimization. On the core `SET`/`GET` workload that matters most for a cache, RAMpage holds its own at roughly **70-90% of Redis throughput**.
+
+---
+
 ## ⚡ Core Features
 
 ### The C++ Database Server
@@ -190,3 +220,4 @@ Instead of inventing a custom binary format, RAMpage natively implements the **R
 - **The Protocol**: All data sent over TCP is formatted into strict RESP types: Simple Strings (`+OK\r\n`), Errors (`-ERR\r\n`), Integers (`:1\r\n`), Bulk Strings (`$5\r\nhello\r\n`), and Arrays (`*2\r\n...`). 
 - **The Architecture**: RAMpage achieves this by cleanly separating the networking layer from the core database. A stateless `RESPParser` intercepts incoming TCP byte streams (handling pipelining and partial frames) and converts them to tokens. The database executes the command, and a `RESPSerializer` formats the internal result back into standard RESP bytes.
 - **Why it matters**: By perfectly mimicking Redis on the wire, RAMpage is instantly compatible with thousands of existing open-source tools. You don't need special drivers — any Node.js, Python, or Go Redis client can connect to RAMpage natively. It also allows us to stress-test the server using industry-standard tools like `redis-benchmark`.
+
