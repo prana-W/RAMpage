@@ -1,9 +1,10 @@
 /**
- * rampage-js
- * Official JavaScript SDK for RAMpage — a high-performance in-memory database.
+ * rampage-node
+ * Official Node.js SDK for RAMpage — a high-performance in-memory database.
+ * Speaks the RESP (REdis Serialization Protocol) wire format natively.
  *
  * @example
- * import { createClient } from 'rampage-js';
+ * import { createClient } from 'rampage-node';
  *
  * const client = createClient({ host: '127.0.0.1', port: 2006 });
  * await client.connect();

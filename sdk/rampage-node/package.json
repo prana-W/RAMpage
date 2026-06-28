@@ -1,5 +1,5 @@
 {
-  "name": "rampage-js",
+  "name": "rampage-node",
   "version": "1.0.0",
   "description": "Official JavaScript SDK for RAMpage — a high-performance in-memory database.",
   "type": "module",

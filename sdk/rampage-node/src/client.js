@@ -10,27 +10,14 @@ import {
 } from './parser.js';
 
 /**
- * Wraps a value in quotes if it contains whitespace, so the RAMpage server
- * tokenizer treats it as a single argument.
- * e.g.  "hello world" → `"hello world"`
- *       "simple"      → `simple`
- *
- * @param {string|number} val
- * @returns {string}
- */
-function quoteIfNeeded(val) {
-  const s = String(val);
-  return /\s/.test(s) ? `"${s.replace(/"/g, '\\"')}"` : s;
-}
-
-/**
  * RampageClient
  *
- * Redis-like client for RAMpage. Every method maps to the corresponding TCP
- * command, sends it over a persistent connection, and returns a typed result.
+ * Redis-like client for RAMpage. Every method maps to the corresponding RESP
+ * command, sends it over a persistent connection as a RESP array, and returns
+ * a typed result — exactly like the official `redis` npm package.
  *
  * Usage:
- *   import { createClient } from 'rampage-js';
+ *   import { createClient } from 'rampage-node';
  *   const client = createClient({ host: '127.0.0.1', port: 2006 });
  *   await client.connect();
  *   await client.set('name', 'Alice');
@@ -50,13 +37,12 @@ export class RampageClient extends EventEmitter {
     super();
     this._conn = new RampageConnection(options);
 
-    // Forward connection events up to the client surface
-    this._conn.on('connect', () => this.emit('connect'));
-    this._conn.on('error', (err) => this.emit('error', err));
-    this._conn.on('close', () => this.emit('close'));
+    // Forward connection events to the client surface
+    this._conn.on('connect',      () =>  this.emit('connect'));
+    this._conn.on('error',   (err) =>   this.emit('error', err));
+    this._conn.on('close',        () =>  this.emit('close'));
     this._conn.on('reconnecting', (info) => this.emit('reconnecting', info));
   }
-
 
   /**
    * Connect to the RAMpage server. Must be awaited before issuing commands.
@@ -74,16 +60,16 @@ export class RampageClient extends EventEmitter {
     await this._conn.disconnect();
   }
 
-
   /**
-   * Low-level: send a raw command string and get the raw response back.
-   * @param {string} cmd
-   * @returns {Promise<string>}
+   * Low-level: send a pre-split arg list as a RESP command.
+   * @param {string[]} args - e.g. ['SET', 'foo', 'bar']
+   * @returns {Promise<any>}
    */
-  async _send(cmd) {
-    return this._conn.sendCommand(cmd);
+  async _send(args) {
+    return this._conn.sendCommand(args);
   }
 
+  // ─── String Commands ──────────────────────────────────────────────────────
 
   /**
    * SET key value [EX seconds]
@@ -93,7 +79,7 @@ export class RampageClient extends EventEmitter {
    * @param {string|number} value
    * @param {object}  [options]
    * @param {number}  [options.ttl]  - Expiry in seconds
-   * @returns {Promise<string>}       - 'Key set successfully'
+   * @returns {Promise<string>}       - 'OK'
    * @throws {RampageError}
    *
    * @example
@@ -101,10 +87,9 @@ export class RampageClient extends EventEmitter {
    * await client.set('token', 'abc123', { ttl: 60 });
    */
   async set(key, value, options = {}) {
-    const parts = ['SET', quoteIfNeeded(key), quoteIfNeeded(value)];
-    if (options.ttl != null) parts.push(String(options.ttl));
-    const raw = await this._send(parts.join(' '));
-    return parseSimple(raw);
+    const args = ['SET', String(key), String(value)];
+    if (options.ttl != null) args.push(String(options.ttl));
+    return parseSimple(await this._send(args));
   }
 
   /**
@@ -112,32 +97,29 @@ export class RampageClient extends EventEmitter {
    * Gets the string value of a key.
    *
    * @param {string} key
-   * @returns {Promise<string | null>}  - The value, or null if the key stores an empty string
-   * @throws {RampageError}             - KEY_NOT_FOUND if key doesn't exist, WRONG_TYPE if key holds a list
+   * @returns {Promise<string | null>}  - The value, or null if the key doesn't exist
+   * @throws {RampageError}
    *
    * @example
    * const val = await client.get('name'); // 'Alice'
    */
   async get(key) {
-    const raw = await this._send(`GET ${quoteIfNeeded(key)}`);
-    const payload = parseValue(raw);
-    return payload === '' ? null : payload;
+    return parseValue(await this._send(['GET', String(key)]));
   }
 
   /**
    * DEL key
-   * Deletes a key.
+   * Deletes a key. Returns 1 if the key existed and was deleted, 0 if not.
    *
    * @param {string} key
-   * @returns {Promise<string>}
-   * @throws {RampageError}  - KEY_NOT_FOUND if key doesn't exist
+   * @returns {Promise<number>}  - 1 (deleted) or 0 (not found)
+   * @throws {RampageError}
    *
    * @example
-   * await client.del('name');
+   * const deleted = await client.del('name'); // 1
    */
   async del(key) {
-    const raw = await this._send(`DEL ${quoteIfNeeded(key)}`);
-    return parseSimple(raw);
+    return parseInteger(await this._send(['DEL', String(key)]));
   }
 
   /**
@@ -155,25 +137,24 @@ export class RampageClient extends EventEmitter {
    * const secs = await client.ttl('token');
    */
   async ttl(key) {
-    const raw = await this._send(`TTL ${quoteIfNeeded(key)}`);
-    return parseTtl(raw);
+    return parseTtl(await this._send(['TTL', String(key)]));
   }
 
   /**
    * EXPIRE key seconds
    * Sets or updates the TTL on an existing key.
+   * Returns 1 if set, 0 if key does not exist.
    *
    * @param {string} key
    * @param {number} seconds
-   * @returns {Promise<string>}  - 'Expiry set'
+   * @returns {Promise<number>}  - 1 (set) or 0 (key not found)
    * @throws {RampageError}
    *
    * @example
    * await client.expire('token', 120);
    */
   async expire(key, seconds) {
-    const raw = await this._send(`EXPIRE ${quoteIfNeeded(key)} ${seconds}`);
-    return parseSimple(raw);
+    return parseInteger(await this._send(['EXPIRE', String(key), String(seconds)]));
   }
 
   /**
@@ -189,8 +170,7 @@ export class RampageClient extends EventEmitter {
    * const len = await client.append('log', ' new entry'); // 10
    */
   async append(key, value) {
-    const raw = await this._send(`APPEND ${quoteIfNeeded(key)} ${quoteIfNeeded(value)}`);
-    return parseInteger(raw);
+    return parseInteger(await this._send(['APPEND', String(key), String(value)]));
   }
 
   /**
@@ -205,8 +185,7 @@ export class RampageClient extends EventEmitter {
    * const len = await client.strlen('name'); // 5
    */
   async strlen(key) {
-    const raw = await this._send(`STRLEN ${quoteIfNeeded(key)}`);
-    return parseInteger(raw);
+    return parseInteger(await this._send(['STRLEN', String(key)]));
   }
 
   // ─── List Commands ────────────────────────────────────────────────────────
@@ -226,10 +205,9 @@ export class RampageClient extends EventEmitter {
    * const len = await client.lpush('queue', 'task-1'); // 1
    */
   async lpush(key, value, options = {}) {
-    const parts = ['LPUSH', quoteIfNeeded(key), quoteIfNeeded(value)];
-    if (options.ttl != null) parts.push(String(options.ttl));
-    const raw = await this._send(parts.join(' '));
-    return parseInteger(raw);
+    const args = ['LPUSH', String(key), String(value)];
+    if (options.ttl != null) args.push(String(options.ttl));
+    return parseInteger(await this._send(args));
   }
 
   /**
@@ -247,10 +225,9 @@ export class RampageClient extends EventEmitter {
    * const len = await client.rpush('queue', 'task-2'); // 2
    */
   async rpush(key, value, options = {}) {
-    const parts = ['RPUSH', quoteIfNeeded(key), quoteIfNeeded(value)];
-    if (options.ttl != null) parts.push(String(options.ttl));
-    const raw = await this._send(parts.join(' '));
-    return parseInteger(raw);
+    const args = ['RPUSH', String(key), String(value)];
+    if (options.ttl != null) args.push(String(options.ttl));
+    return parseInteger(await this._send(args));
   }
 
   /**
@@ -258,16 +235,14 @@ export class RampageClient extends EventEmitter {
    * Removes and returns the HEAD (left) element of a list.
    *
    * @param {string} key
-   * @returns {Promise<string>}
-   * @throws {RampageError}  - KEY_NOT_FOUND if key or list is empty/missing
+   * @returns {Promise<string | null>}  - The element, or null if key doesn't exist
+   * @throws {RampageError}
    *
    * @example
    * const task = await client.lpop('queue'); // 'task-1'
    */
   async lpop(key) {
-    const raw = await this._send(`LPOP ${quoteIfNeeded(key)}`);
-    const payload = parseValue(raw);
-    return payload === '' ? null : payload;
+    return parseValue(await this._send(['LPOP', String(key)]));
   }
 
   /**
@@ -275,16 +250,14 @@ export class RampageClient extends EventEmitter {
    * Removes and returns the TAIL (right) element of a list.
    *
    * @param {string} key
-   * @returns {Promise<string>}
-   * @throws {RampageError}  - KEY_NOT_FOUND if key or list is empty/missing
+   * @returns {Promise<string | null>}  - The element, or null if key doesn't exist
+   * @throws {RampageError}
    *
    * @example
    * const task = await client.rpop('queue'); // 'task-2'
    */
   async rpop(key) {
-    const raw = await this._send(`RPOP ${quoteIfNeeded(key)}`);
-    const payload = parseValue(raw);
-    return payload === '' ? null : payload;
+    return parseValue(await this._send(['RPOP', String(key)]));
   }
 
   /**
@@ -299,27 +272,24 @@ export class RampageClient extends EventEmitter {
    * const n = await client.llen('queue'); // 2
    */
   async llen(key) {
-    const raw = await this._send(`LLEN ${quoteIfNeeded(key)}`);
-    return parseInteger(raw);
+    return parseInteger(await this._send(['LLEN', String(key)]));
   }
 
   /**
    * LINDEX key index
-   * Returns the element at the given index in a list. Negative indices count from the tail.
+   * Returns the element at the given index. Negative indices count from the tail.
    *
    * @param {string} key
    * @param {number} index
-   * @returns {Promise<string>}
-   * @throws {RampageError}  - KEY_NOT_FOUND if key missing, OUT_OF_BOUNDS if index invalid
+   * @returns {Promise<string | null>}  - The element, or null if index out of range
+   * @throws {RampageError}
    *
    * @example
    * const first = await client.lindex('queue', 0);  // 'task-1'
    * const last  = await client.lindex('queue', -1); // 'task-2'
    */
   async lindex(key, index) {
-    const raw = await this._send(`LINDEX ${quoteIfNeeded(key)} ${index}`);
-    const payload = parseValue(raw);
-    return payload === '' ? null : payload;
+    return parseValue(await this._send(['LINDEX', String(key), String(index)]));
   }
 
   /**
@@ -329,21 +299,20 @@ export class RampageClient extends EventEmitter {
    * @param {string} key
    * @param {number} index
    * @param {string|number} value
-   * @returns {Promise<string>}  - 'Element set'
+   * @returns {Promise<string>}  - 'OK'
    * @throws {RampageError}
    *
    * @example
    * await client.lset('queue', 0, 'urgent-task');
    */
   async lset(key, index, value) {
-    const raw = await this._send(`LSET ${quoteIfNeeded(key)} ${index} ${quoteIfNeeded(value)}`);
-    return parseSimple(raw);
+    return parseSimple(await this._send(['LSET', String(key), String(index), String(value)]));
   }
 
   /**
    * LRANGE key start stop
-   * Returns a JS array of elements from start to stop (inclusive). Negative
-   * indices count from the tail (-1 = last element).
+   * Returns a JS array of elements from start to stop (inclusive).
+   * Negative indices count from the tail (-1 = last element).
    *
    * @param {string} key
    * @param {number} start
@@ -355,28 +324,25 @@ export class RampageClient extends EventEmitter {
    * const all = await client.lrange('queue', 0, -1); // ['task-1', 'task-2']
    */
   async lrange(key, start, stop) {
-    const raw = await this._send(`LRANGE ${quoteIfNeeded(key)} ${start} ${stop}`);
-    return parseLrange(raw);
+    return parseLrange(await this._send(['LRANGE', String(key), String(start), String(stop)]));
   }
 
   // ─── Escape Hatch ─────────────────────────────────────────────────────────
 
   /**
-   * sendCommand(rawCommand)
+   * sendCommand(args)
    *
-   * Send any raw command string directly to RAMpage and get the raw response back
-   * as a string — no parsing, no throwing on ERR. Useful for commands not yet in
-   * the SDK or for debugging.
+   * Send any RESP command directly and get the raw decoded value back.
+   * Useful for commands not yet in the SDK or for debugging.
    *
-   * @param {string} command  - The full command string, e.g. 'SET foo bar'
-   * @returns {Promise<string>}
+   * @param {string[]} args  - e.g. ['SET', 'mykey', '42']
+   * @returns {Promise<any>}
    *
    * @example
-   * const resp = await client.sendCommand('SET mykey 42');
-   * console.log(resp); // 'Key set successfully'
+   * const value = await client.sendCommand(['SET', 'mykey', '42']);
+   * console.log(value); // 'OK'
    */
-  async sendCommand(command) {
-    const raw = await this._send(command);
-    return parseRaw(raw);
+  async sendCommand(args) {
+    return parseRaw(await this._send(args));
   }
 }
