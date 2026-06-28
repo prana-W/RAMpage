@@ -308,3 +308,96 @@ We renamed the directory from `sdk/rampage-js` to `sdk/rampage-node` and updated
 - The `DEL` and `EXPIRE` methods were updated to expect numbers (`1` or `0`) instead of plain strings, matching the new Redis-compatible backend behavior.
 
 The `rampage-node` SDK is now a fully-featured RESP client perfectly aligned with how real Redis drivers work!
+
+# Phase - 8 (Micro-Optimisations)
+
+Before:
+
+| Command | Redis (req/s) | RAMpage (req/s) | Redis p50 (ms) | RAMpage p50 (ms) | Verdict |
+|---|---|---|---|---|---|
+| PING_INLINE | 82,237 | 93,721 | 0.471 | 0.287 | RAMpage **faster** |
+| PING_MBULK | 81,301 | 94,607 | 0.463 | 0.207 | RAMpage **faster** |
+| SET | 76,805 | 79,302 | 0.559 | 0.407 | RAMpage **faster** |
+| GET | 80,128 | 54,615 | 0.511 | 0.119 | Throughput: Redis wins. Latency: RAMpage wins |
+| LPUSH | 80,451 | 68,399 | 0.551 | 0.247 | Throughput: Redis wins. Latency: RAMpage wins |
+| RPUSH | 81,367 | 79,872 | 0.543 | 0.127 | Roughly tied throughput, RAMpage **lower latency** |
+| LPOP | 80,192 | 80,515 | 0.551 | 0.415 | RAMpage **faster** |
+| RPOP | 80,064 | 80,257 | 0.559 | 0.423 | RAMpage **faster** |
+| LRANGE_100 | 59,137 | 6,288 | 0.479 | 7.671 | Redis **~9.4x faster** |
+| LRANGE_300 | 31,888 | 2,494 | 0.783 | 18.655 | Redis **~12.8x faster** |
+| LRANGE_500 | 22,232 | 1,667 | 1.119 | 28.975 | Redis **~13.3x faster** |
+| LRANGE_600 | 19,505 | 1,273 | 1.271 | 37.759 | Redis **~15.3x faster** |
+
+
+After:
+
+(run benchmark again and paste new numbers here)
+
+## What Was the Problem?
+
+Our LRANGE command was **~15x slower than Redis**. Every other command (SET, GET, LPUSH, RPOP, etc.) was at par or even faster than Redis, but LRANGE with 600 elements took 37ms vs Redis's 1.2ms. The question was: why?
+
+## Root Cause Analysis
+
+We traced the full LRANGE code path and found **5 compounding bottlenecks** — the data was being copied, joined, split, and rebuilt multiple times before finally being sent over the wire.
+
+### The Old Data Flow (before optimization)
+
+```
+1. Database::lrange()
+   → Copies 600 strings from deque into a new vector
+   → Copies the entire vector into the Response variant
+
+2. ListCommands.cpp LRANGE handler
+   → Joins all 600 strings with '|' using O(n²) string concatenation (payload += "|" + vec[i])
+   → Returns "SUCC:a|b|c|d|e|..."
+
+3. RESPSerializer::serialize()
+   → Calls splitPipe() which creates a std::istringstream, re-parses the pipe string back into a NEW vector of 600 strings
+   → Calls array() which does ANOTHER O(n²) loop: out += bulkString(item)
+
+4. Server::processClientBuffer()
+   → Calls send() individually for EVERY command in the pipeline (one syscall per command)
+```
+
+**The pipe-join → split → rejoin dance was the core problem.** We were joining 600 strings into one pipe-separated string, only to immediately split it back into 600 strings and re-encode them as RESP. This is like translating English → French → English → German when you could have just gone English → German directly.
+
+## What We Changed (File by File)
+
+### 1. `Database.cpp` — `std::move` on lrange result
+Changed `return {Status::OK, "Range fetched", res}` to `return {Status::OK, "Range fetched", std::move(res)}`. This avoids copying the entire vector of strings when returning from the function — the vector is moved (pointer swap) instead of deep-copied.
+
+### 2. `ListCommands.cpp` — Direct RESP serialization for LRANGE
+This was the biggest change. Instead of pipe-joining all elements and returning `SUCC:a|b|c`, the LRANGE handler now builds the RESP array bytes directly:
+
+```cpp
+std::string resp;
+resp.reserve(totalSize);  // single allocation!
+resp += "*600\r\n";
+for (item : vec) resp += "$3\r\nfoo\r\n";
+return "RESP:" + resp;
+```
+
+The `RESP:` prefix is a signal to the server: "these bytes are already in RESP wire format, send them directly without going through the serializer." This completely eliminates the pipe-join → splitPipe → array rebuild dance.
+
+### 3. `RESPSerializer.cpp` — Two fixes
+- **`array()` method**: Added `reserve()` to pre-calculate the total output size and do a single memory allocation. Before, the loop `out += bulkString(item)` was O(n²) because each `+=` potentially reallocated the entire string.
+- **`serialize()` method**: Replaced `result.substr(0, 4) == "ERR:"` with `result.compare(0, 4, "ERR:") == 0`. `substr()` creates a temporary string (heap allocation), while `compare()` does an in-place comparison with zero allocations.
+
+### 4. `Server.cpp` — Two fixes
+- **RESP: prefix detection**: If the command handler returns a string starting with `RESP:`, the server appends the bytes (from offset 5) directly to the output buffer, skipping the serializer entirely.
+- **Batched send()**: Instead of calling `send()` after every single command in a pipeline, we now accumulate all responses in a single `outBuf` string and do ONE `send()` syscall at the end of the pipeline loop. For `redis-benchmark` which pipelines 16 commands per batch, this reduces syscalls from 16 to 1 per batch.
+
+### 5. `RESPParser.cpp` — Replaced `std::istringstream`
+In the inline command parser (used by `PING_INLINE`), replaced the `std::istringstream` tokenizer with a manual `string::find(' ')` loop. `istringstream` constructs a heavyweight stream object on every call — the manual split is a simple pointer scan with zero overhead.
+
+## Why These Changes Work
+
+| Optimization | What it eliminates |
+|---|---|
+| `std::move` in lrange | Deep copy of 600-element vector |
+| Direct RESP build in handler | The entire pipe-join → split → rebuild pipeline |
+| `reserve()` in array() | O(n²) reallocation → O(n) single allocation |
+| `compare()` vs `substr()` | Temporary string allocation on every command |
+| Batched `send()` | 16 syscalls → 1 syscall per pipeline batch |
+| Manual split vs istringstream | Stream object construction/destruction per command |

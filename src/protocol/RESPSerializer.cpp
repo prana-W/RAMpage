@@ -40,9 +40,22 @@ std::string RESPSerializer::nullBulkString() {
 }
 
 std::string RESPSerializer::array(const std::vector<std::string>& items) {
-    std::string out = "*" + std::to_string(items.size()) + "\r\n";
+    size_t totalSize = 16;
     for (const auto& item : items)
-        out += bulkString(item);
+        totalSize += item.size() + 16;
+
+    std::string out;
+    out.reserve(totalSize);
+    out += '*';
+    out += std::to_string(items.size());
+    out += "\r\n";
+    for (const auto& item : items) {
+        out += '$';
+        out += std::to_string(item.size());
+        out += "\r\n";
+        out += item;
+        out += "\r\n";
+    }
     return out;
 }
 
@@ -69,21 +82,19 @@ static bool isInteger(const std::string& s) {
 
 std::string RESPSerializer::serialize(const std::string& result, const std::string& cmdName) {
     // --- Error response ---
-    if (result.size() >= 4 && result.substr(0, 4) == "ERR:") {
+    if (result.size() >= 4 && result.compare(0, 4, "ERR:") == 0) {
         std::string msg = result.substr(4);
-        // Special case: WRONGTYPE (Redis convention for type mismatches)
-        if (msg.rfind("Wrong type", 0) == 0)
+        if (msg.compare(0, 10, "Wrong type") == 0)
             return "-WRONGTYPE " + msg + "\r\n";
         return errorMsg(msg);
     }
 
     // --- Success response (must start with "SUCC:") ---
-    if (result.size() < 5 || result.substr(0, 5) != "SUCC:") {
-        // Malformed internal result — emit as error
+    if (result.size() < 5 || result.compare(0, 5, "SUCC:") != 0) {
         return errorMsg("internal error: " + result);
     }
 
-    std::string payload = result.substr(5);  // everything after "SUCC:"
+    const std::string payload = result.substr(5);
 
     // --- Integer commands ---
     if (INTEGER_CMDS.count(cmdName)) {

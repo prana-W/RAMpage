@@ -277,7 +277,7 @@ Response Database::lrange(const std::string &key, long long start, long long sto
                 res.push_back(deq[i]);
             }
         }
-        return {Status::OK, "Range fetched", res};
+        return {Status::OK, "Range fetched", std::move(res)};
     }
     return {Status::ERROR, "Wrong type operation", std::monostate{}};
 }

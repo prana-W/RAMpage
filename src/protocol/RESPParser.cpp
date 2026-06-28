@@ -1,7 +1,5 @@
 #include "RESPParser.h"
 
-#include <sstream>
-
 static ParseResult parseArray(std::string& buf, ParsedCommand& out) {
     // Find the end of the count line: *<N>\r\n
     size_t firstCRLF = buf.find("\r\n");
@@ -83,11 +81,16 @@ static ParseResult parseInline(std::string& buf, ParsedCommand& out) {
     if (line.empty())
         return ParseResult::ERROR;  // empty line — caller skips it
 
-    std::istringstream iss(line);
-    std::string token;
+    // Manual space-split (avoids std::istringstream allocation overhead)
     std::vector<std::string> args;
-    while (iss >> token)
-        args.push_back(std::move(token));
+    size_t start = 0, end;
+    while ((end = line.find(' ', start)) != std::string::npos) {
+        if (end > start)
+            args.push_back(line.substr(start, end - start));
+        start = end + 1;
+    }
+    if (start < line.size())
+        args.push_back(line.substr(start));
 
     if (args.empty())
         return ParseResult::ERROR;

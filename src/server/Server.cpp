@@ -80,6 +80,8 @@ void Server::removeClient(int clientFd) {
 
 void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db,
                                  CommandRegistry& registry) {
+    std::string outBuf;  // accumulate all pipelined responses for a single send()
+
     while (true) {
         ParsedCommand cmd;
         ParseResult pr = RESPParser::parse(buffer, cmd);
@@ -89,11 +91,10 @@ void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db
         }
 
         if (pr == ParseResult::ERROR) {
-            // Skip empty inline lines silently; close on real protocol errors
             if (buffer.empty())
                 break;
-            std::string errResp = RESPSerializer::errorMsg("Protocol error");
-            send(clientFd, errResp.c_str(), errResp.size(), 0);
+            outBuf += RESPSerializer::errorMsg("Protocol error");
+            send(clientFd, outBuf.c_str(), outBuf.size(), 0);
             removeClient(clientFd);
             return;
         }
@@ -108,8 +109,8 @@ void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db
 
         // QUIT / EXIT — send +OK and close gracefully (Redis behavior)
         if (cmdName == "QUIT" || cmdName == "EXIT") {
-            std::string resp = RESPSerializer::simpleString("OK");
-            send(clientFd, resp.c_str(), resp.size(), 0);
+            outBuf += RESPSerializer::simpleString("OK");
+            send(clientFd, outBuf.c_str(), outBuf.size(), 0);
             removeClient(clientFd);
             return;
         }
@@ -117,10 +118,17 @@ void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db
         // Dispatch through the command registry
         std::string internalResult = registry.execute(db, cmd.args);
 
-        // Serialize the internal result to RESP wire format
-        std::string resp = RESPSerializer::serialize(internalResult, cmdName);
-        send(clientFd, resp.c_str(), resp.size(), 0);
+        // "RESP:" prefix = pre-serialized RESP bytes, send as-is (used by LRANGE)
+        if (internalResult.size() >= 5 && internalResult.compare(0, 5, "RESP:") == 0) {
+            outBuf.append(internalResult, 5, std::string::npos);
+        } else {
+            outBuf += RESPSerializer::serialize(internalResult, cmdName);
+        }
     }
+
+    // Flush all accumulated responses in one syscall
+    if (!outBuf.empty())
+        send(clientFd, outBuf.c_str(), outBuf.size(), 0);
 }
 
 // --- Public API ---

@@ -122,17 +122,26 @@ void registerListCommands(CommandRegistry& reg) {
         if (res.status == Status::OK &&
             std::holds_alternative<std::vector<std::string>>(res.data)) {
             const auto& vec = std::get<std::vector<std::string>>(res.data);
-            if (vec.empty())
-                return "SUCC:";
-            // Items joined by '|' so the whole response fits on one TCP line.
-            // The SDK splits on '|' to reconstruct the JS array.
-            std::string payload = "";
-            for (size_t i = 0; i < vec.size(); ++i) {
-                if (i > 0)
-                    payload += "|";
-                payload += vec[i];
+
+            // Build RESP array directly — skip the pipe-join intermediate.
+            // Pre-calculate size to do a single allocation.
+            size_t totalSize = 16;  // header overhead
+            for (const auto& item : vec)
+                totalSize += item.size() + 16;  // per-element overhead
+
+            std::string resp;
+            resp.reserve(totalSize);
+            resp += '*';
+            resp += std::to_string(vec.size());
+            resp += "\r\n";
+            for (const auto& item : vec) {
+                resp += '$';
+                resp += std::to_string(item.size());
+                resp += "\r\n";
+                resp += item;
+                resp += "\r\n";
             }
-            return "SUCC:" + payload;
+            return "RESP:" + resp;
         }
         return "ERR:" + res.message;
     });
