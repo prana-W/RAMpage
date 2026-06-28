@@ -6,7 +6,7 @@
 
 **RAMpage** is a Redis-inspired, high-performance in-memory database server implemented from scratch in C++. It rampages through reads and writes with ultra-low latency, leveraging modern Linux I/O via `epoll`.
 
-It comes packaged with a professional-grade **Node.js SDK** (`rampage-node`) so you can integrate it directly into your backend seamlessly. By natively speaking the **RESP (REdis Serialization Protocol)**, RAMpage is 100% compatible with the official `redis-cli`, `redis-benchmark`, and any Redis client library.
+By natively speaking the **RESP (REdis Serialization Protocol)**, RAMpage is 100% compatible with the official `redis-cli`, `redis-benchmark`, and any Redis client library.
 
 ---
 
@@ -52,13 +52,6 @@ The results are incredible: **RAMpage delivers significantly lower latency** acr
 - **Persistence (AOF)**: All write commands are automatically persisted to an Append-Only File (`rampage.rampage`). On server restart, the log is fully replayed to restore in-memory state — no data loss.
 - **Interactive CLI**: Comes with a `rampage-cli` tool to interactively run commands against the server.
 
-### The Node.js SDK (`rampage-node`)
-- **Native ESM**: Pure Node.js ES modules, ready for modern applications with zero external dependencies.
-- **Promise-Based**: `async/await` ready API (`const user = await client.get('user')`).
-- **Persistent Connection Management**: Maintains a single persistent TCP connection. Commands are queued securely and responses matched in-order.
-- **Auto-Reconnect**: Exponential backoff reconnect logic handles server restarts seamlessly.
-- **Rich Parsing**: Automatically converts server strings into native JavaScript Types (numbers, string arrays, `null` for missing keys).
-- **Strong Errors**: Throws parsed `RampageError` objects with machine-readable codes (e.g. `KEY_NOT_FOUND`, `WRONG_TYPE`).
 
 ---
 
@@ -126,9 +119,9 @@ You can also test the database's throughput using the official benchmark tool:
 redis-benchmark -p 2006 -t set,get -n 100000 -q
 ```
 
-### 3. Use an existing Redis SDK (or our custom one)
+### 3. Use an existing Redis SDK
 
-Because RAMpage uses the exact same wire protocol as Redis (RESP), you don't even need a custom SDK! You can use any standard Redis client (like `redis` in Node.js, `redis-py` in Python, or `go-redis` in Go). All you have to do is point the SDK to the RAMpage port (default `2006`) instead of the default Redis port (`6379`).
+Because RAMpage uses the exact same wire protocol as Redis (RESP), you can use any standard Redis client natively (like `redis` in Node.js, `redis-py` in Python, or `go-redis` in Go). All you have to do is point the SDK to the RAMpage port (default `2006`) instead of the default Redis port (`6379`).
 
 ```js
 // Using the official 'redis' npm package
@@ -142,41 +135,7 @@ await client.set('name', 'Alice');
 > [!NOTE]  
 > **Command Support Caveat**: While RAMpage is protocol-compatible with Redis, it does not yet support every single Redis command. Currently, it supports core String and List operations. If you send an unsupported command, RAMpage will safely return an `ERR: unknown command` response.
 
-<br>
 
-Alternatively, RAMpage comes with its own educational Node.js SDK (`rampage-node`) that perfectly maps to the supported commands:
-
-*(Note: I will later publish the SDK to npm, so that the code can be easily installed via `npm install rampage-node`)*
-
-Add the custom SDK to your Node.js project:
-
-```js
-import { createClient } from './sdk/rampage-node/src/index.js'; // Soon: import { createClient } from 'rampage-node'
-
-async function main() {
-  // 1. Initialize client
-  const client = createClient({ host: '127.0.0.1', port: 2006 });
-
-  // 2. Connect to the server
-  await client.connect();
-  console.log('✅ Connected to RAMpage!');
-
-  // 3. Perform operations
-  await client.set('user', 'Alice', { ttl: 10000 }); // Expires in 10s
-
-  const user = await client.get('user');
-  console.log(`Hello, ${user}!`);
-
-  await client.rpush('jobs', 'task-1');
-  const jobs = await client.lrange('jobs', 0, -1);
-  console.log(`Jobs queue:`, jobs);
-
-  // 4. Cleanup
-  await client.disconnect();
-}
-
-main();
-```
 
 ---
 
@@ -187,7 +146,7 @@ main();
   - `database/` — The in-memory data structures and logic.
   - `commands/` — Handlers bridging raw strings to the `Database` methods.
   - `persistence/` — The `PersistenceManager` handling AOF logging and replay.
-- **`sdk/rampage-node/`** — The Node.js client package.
+
 - **`tests/`** — Server tests and Node.js testing playground.
 - **`docs/`** — Internal design notes.
 
