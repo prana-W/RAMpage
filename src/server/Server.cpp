@@ -80,7 +80,8 @@ void Server::removeClient(int clientFd) {
 
 void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db,
                                  CommandRegistry& registry) {
-    std::string outBuf;  // accumulate all pipelined responses for a single send()
+    std::string outBuf;          // accumulate all pipelined responses for a single send()
+    outBuf.reserve(128 * 1024);  // Pre-allocate 128KB to avoid reallocation during pipeline batches
 
     while (true) {
         ParsedCommand cmd;

@@ -248,7 +248,7 @@ Response Database::lset(const std::string &key, long long index, const std::stri
 
 Response Database::lrange(const std::string &key, long long start, long long stop) {
     if (!checkAndExpire(key)) {
-        return {Status::OK, "Key not found", std::vector<std::string>{}};
+        return {Status::OK, "Key not found", std::vector<std::string_view>{}};
     }
 
     auto &entry = data[key];
@@ -271,10 +271,12 @@ Response Database::lrange(const std::string &key, long long start, long long sto
         if (stop >= size)
             stop = size - 1;
 
-        std::vector<std::string> res;
+        std::vector<std::string_view> res;
         if (start <= stop && start < size) {
-            for (long long i = start; i <= stop; ++i) {
-                res.push_back(deq[i]);
+            res.reserve(stop - start + 1);
+            auto it = deq.begin() + start;
+            for (long long i = start; i <= stop; ++i, ++it) {
+                res.push_back(*it);  // implicit cast to string_view, zero copy
             }
         }
         return {Status::OK, "Range fetched", std::move(res)};

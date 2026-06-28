@@ -1,3 +1,4 @@
+#include <charconv>
 #include <variant>
 
 #include "CommandRegistry.h"
@@ -20,7 +21,7 @@ void registerListCommands(CommandRegistry& reg) {
         }
         Response res = db.lpush(args[0], args[1], ttlMs);
         if (res.status == Status::OK && std::holds_alternative<long long>(res.data)) {
-            return "SUCC:" + std::to_string(std::get<long long>(res.data));
+            return "RESP::" + std::to_string(std::get<long long>(res.data)) + "\r\n";
         }
         return "ERR:" + res.message;
     });
@@ -38,7 +39,7 @@ void registerListCommands(CommandRegistry& reg) {
         }
         Response res = db.rpush(args[0], args[1], ttlMs);
         if (res.status == Status::OK && std::holds_alternative<long long>(res.data)) {
-            return "SUCC:" + std::to_string(std::get<long long>(res.data));
+            return "RESP::" + std::to_string(std::get<long long>(res.data)) + "\r\n";
         }
         return "ERR:" + res.message;
     });
@@ -47,10 +48,12 @@ void registerListCommands(CommandRegistry& reg) {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'lpop'";
         Response res = db.lpop(args[0]);
-        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data))
-            return "SUCC:" + std::get<std::string>(res.data);
+        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data)) {
+            const std::string& val = std::get<std::string>(res.data);
+            return "RESP:$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+        }
         if (res.status == Status::KEY_NOT_FOUND)
-            return "SUCC:";  // nil — key/list not found
+            return "RESP:$-1\r\n";  // nil — key/list not found
         return "ERR:" + res.message;
     });
 
@@ -58,10 +61,12 @@ void registerListCommands(CommandRegistry& reg) {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'rpop'";
         Response res = db.rpop(args[0]);
-        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data))
-            return "SUCC:" + std::get<std::string>(res.data);
+        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data)) {
+            const std::string& val = std::get<std::string>(res.data);
+            return "RESP:$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+        }
         if (res.status == Status::KEY_NOT_FOUND)
-            return "SUCC:";  // nil — key/list not found
+            return "RESP:$-1\r\n";  // nil — key/list not found
         return "ERR:" + res.message;
     });
 
@@ -70,7 +75,7 @@ void registerListCommands(CommandRegistry& reg) {
             return "ERR:wrong number of arguments for 'llen'";
         Response res = db.llen(args[0]);
         if (std::holds_alternative<long long>(res.data)) {
-            return "SUCC:" + std::to_string(std::get<long long>(res.data));
+            return "RESP::" + std::to_string(std::get<long long>(res.data)) + "\r\n";
         }
         return "ERR:" + res.message;
     });
@@ -85,10 +90,12 @@ void registerListCommands(CommandRegistry& reg) {
             return "ERR:index must be an integer";
         }
         Response res = db.lindex(args[0], index);
-        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data))
-            return "SUCC:" + std::get<std::string>(res.data);
+        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data)) {
+            const std::string& val = std::get<std::string>(res.data);
+            return "RESP:$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+        }
         if (res.status == Status::KEY_NOT_FOUND)
-            return "SUCC:";  // nil — index out of range or key not found
+            return "RESP:$-1\r\n";  // nil — index out of range or key not found
         return "ERR:" + res.message;
     });
 
@@ -103,7 +110,7 @@ void registerListCommands(CommandRegistry& reg) {
         }
         Response res = db.lset(args[0], index, args[2]);
         if (res.status == Status::OK)
-            return "SUCC:";
+            return "RESP:+OK\r\n";
         return "ERR:" + res.message;
     });
 
@@ -120,28 +127,33 @@ void registerListCommands(CommandRegistry& reg) {
         Response res = db.lrange(args[0], start, stop);
 
         if (res.status == Status::OK &&
-            std::holds_alternative<std::vector<std::string>>(res.data)) {
-            const auto& vec = std::get<std::vector<std::string>>(res.data);
+            std::holds_alternative<std::vector<std::string_view>>(res.data)) {
+            const auto& vec = std::get<std::vector<std::string_view>>(res.data);
 
             // Build RESP array directly — skip the pipe-join intermediate.
             // Pre-calculate size to do a single allocation.
-            size_t totalSize = 16;  // header overhead
+            size_t totalSize = 16 + 5;  // header overhead + "RESP:" prefix
             for (const auto& item : vec)
                 totalSize += item.size() + 16;  // per-element overhead
 
             std::string resp;
             resp.reserve(totalSize);
-            resp += '*';
-            resp += std::to_string(vec.size());
+            resp.append("RESP:*");
+
+            char buf[32];
+            auto res_size = std::to_chars(buf, buf + 32, vec.size());
+            resp.append(buf, res_size.ptr - buf);
             resp += "\r\n";
+
             for (const auto& item : vec) {
                 resp += '$';
-                resp += std::to_string(item.size());
+                auto item_size = std::to_chars(buf, buf + 32, item.size());
+                resp.append(buf, item_size.ptr - buf);
                 resp += "\r\n";
-                resp += item;
+                resp.append(item.data(), item.size());
                 resp += "\r\n";
             }
-            return "RESP:" + resp;
+            return resp;
         }
         return "ERR:" + res.message;
     });

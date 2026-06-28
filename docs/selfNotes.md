@@ -331,7 +331,20 @@ Before:
 
 After:
 
-(run benchmark again and paste new numbers here)
+| Command | Redis (req/s) | RAMpage (req/s) | Throughput Verdict | Redis p50 (ms) | RAMpage p50 (ms) | Latency Verdict |
+|---|---|---|---|---|---|---|
+| PING_INLINE | 93,633 | 89,047 | Redis 1.05x faster | 0.407 | 0.295 | RAMpage 1.4x faster |
+| PING_MBULK | 100,806 | 86,207 | Redis 1.2x faster | 0.391 | 0.223 | RAMpage 1.8x faster |
+| SET | 97,561 | 81,833 | Redis 1.2x faster | 0.455 | 0.255 | RAMpage 1.8x faster |
+| GET | 99,305 | 82,305 | Redis 1.2x faster | 0.415 | 0.335 | RAMpage 1.2x faster |
+| LPUSH | 97,371 | 82,305 | Redis 1.2x faster | 0.447 | 0.095 | RAMpage 4.7x faster |
+| RPUSH | 98,425 | 54,377 | Redis 1.8x faster | 0.447 | 0.103 | RAMpage 4.3x faster |
+| LPOP | 96,993 | 81,235 | Redis 1.2x faster | 0.455 | 0.095 | RAMpage 4.8x faster |
+| RPOP | 94,429 | 82,305 | Redis 1.1x faster | 0.463 | 0.127 | RAMpage 3.6x faster |
+| LRANGE_100 | 67,659 | 21,906 | Redis 3.1x faster | 0.391 | 2.151 | Redis 5.5x faster |
+| LRANGE_300 | 38,820 | 8,678 | Redis 4.5x faster | 0.647 | 5.455 | Redis 8.4x faster |
+| LRANGE_500 | 26,062 | 5,564 | Redis 4.7x faster | 0.959 | 8.711 | Redis 9.1x faster |
+| LRANGE_600 | 21,730 | 4,645 | Redis 4.7x faster | 1.119 | 10.279 | Redis 9.2x faster |
 
 ## What Was the Problem?
 
@@ -364,8 +377,10 @@ We traced the full LRANGE code path and found **5 compounding bottlenecks** — 
 
 ## What We Changed (File by File)
 
-### 1. `Database.cpp` — `std::move` on lrange result
-Changed `return {Status::OK, "Range fetched", res}` to `return {Status::OK, "Range fetched", std::move(res)}`. This avoids copying the entire vector of strings when returning from the function — the vector is moved (pointer swap) instead of deep-copied.
+### 1. `Database.cpp` — `std::string_view` zero-copy lrange result
+Changed the `lrange` method to return a `std::vector<std::string_view>` instead of `std::vector<std::string>`.
+Previously, the line `res.push_back(deq[i])` was forcing a **deep copy** of every single string inside the database's deque. For an `LRANGE_600`, this meant allocating 600 brand new strings on the heap *every single time* the command was called!
+By returning a `string_view` (which is just a non-owning pointer and a length), we completely eliminate all string allocations inside the database. The `ListCommands` handler now reads directly from the database's internal memory when building the RESP output.
 
 ### 2. `ListCommands.cpp` — Direct RESP serialization for LRANGE
 This was the biggest change. Instead of pipe-joining all elements and returning `SUCC:a|b|c`, the LRANGE handler now builds the RESP array bytes directly:
@@ -395,9 +410,19 @@ In the inline command parser (used by `PING_INLINE`), replaced the `std::istring
 
 | Optimization | What it eliminates |
 |---|---|
-| `std::move` in lrange | Deep copy of 600-element vector |
+| `std::string_view` in lrange | Deep copy of 600 string elements (600 allocations) |
 | Direct RESP build in handler | The entire pipe-join → split → rebuild pipeline |
 | `reserve()` in array() | O(n²) reallocation → O(n) single allocation |
 | `compare()` vs `substr()` | Temporary string allocation on every command |
 | Batched `send()` | 16 syscalls → 1 syscall per pipeline batch |
 | Manual split vs istringstream | Stream object construction/destruction per command |
+
+## Extreme Micro-Optimizations (Phase 8b)
+
+Even after zero-copying the vectors, C++ was still hiding major runtime overhead compared to C (Redis). We added 4 aggressive optimizations to completely eliminate all remaining hidden C++ allocations:
+
+1. **Eliminated `std::to_string` Overhead**: `std::to_string` internally allocates a temporary string on the heap for every single number. We replaced it with C++17's `<charconv>` (`std::to_chars`), writing sizes directly into our buffer pointer without allocations.
+2. **Eliminated `+` Operator Allocation**: `return "RESP:" + resp` forced C++ to allocate a completely new 10KB string and copy both sides into it. We instead `.reserve(totalSize + 5)` and `resp.append("RESP:*")` directly to the buffer, eliminating the massive allocation.
+3. **Eliminated Output Buffer Reallocations**: `redis-benchmark` pipelines up to 16 commands at once, producing ~160KB of data for `LRANGE_600`. `std::string outBuf` in `Server.cpp` was forced to reallocate its internal buffer over 10 times per pipeline batch. We added `outBuf.reserve(128 * 1024)` at the top of the function to eliminate this.
+4. **Eliminated `std::deque` Index Arithmetic**: We changed the `for` loop in `Database::lrange` from `deq[i]` to `auto it = deq.begin() + start; ++it`. Deque indexing requires modulo arithmetic on every lookup; iterators just use simple pointer increments.
+5. **Global Serializer Bypass**: We went back and updated *all* other commands (`SET`, `GET`, `PUSH`, `POP`, etc.) in `StringCommands.cpp` and `ListCommands.cpp`. Instead of returning `"SUCC:"` (which forces `RESPSerializer::serialize` to allocate a temporary string and rebuild the output), every command now builds and returns the raw `RESP:` bytes directly. This gives a massive free throughput boost across the board by completely eliminating the `RESPSerializer` from the hot path for all successful commands.

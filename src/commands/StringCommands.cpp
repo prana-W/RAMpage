@@ -7,8 +7,8 @@ void registerStringCommands(CommandRegistry& reg) {
     reg.registerCommand("PING", [](Database&, std::vector<std::string>& args) -> std::string {
         // PING [message] — echoes the message, or "PONG" if no argument
         if (args.empty())
-            return "SUCC:PONG";
-        return "SUCC:" + args[0];
+            return "RESP:+PONG\r\n";
+        return "RESP:$" + std::to_string(args[0].size()) + "\r\n" + args[0] + "\r\n";
     });
 
     // SET key value [ttlSeconds]
@@ -25,7 +25,7 @@ void registerStringCommands(CommandRegistry& reg) {
         }
         Response res = db.set(args[0], args[1], ttlMs);
         if (res.status == Status::OK)
-            return "SUCC:";
+            return "RESP:+OK\r\n";
         return "ERR:" + res.message;
     });
 
@@ -34,11 +34,13 @@ void registerStringCommands(CommandRegistry& reg) {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'get'";
         Response res = db.get(args[0]);
-        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data))
-            return "SUCC:" + std::get<std::string>(res.data);
-        // Key not found or wrong type — return nil (empty SUCC: → $-1\r\n)
+        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data)) {
+            const std::string& val = std::get<std::string>(res.data);
+            return "RESP:$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+        }
+        // Key not found or wrong type — return nil
         if (res.status == Status::KEY_NOT_FOUND)
-            return "SUCC:";
+            return "RESP:$-1\r\n";
         return "ERR:" + res.message;
     });
 
@@ -48,9 +50,9 @@ void registerStringCommands(CommandRegistry& reg) {
             return "ERR:wrong number of arguments for 'del'";
         Response res = db.del(args[0]);
         if (res.status == Status::OK)
-            return "SUCC:1";
+            return "RESP::1\r\n";
         if (res.status == Status::KEY_NOT_FOUND)
-            return "SUCC:0";
+            return "RESP::0\r\n";
         return "ERR:" + res.message;
     });
 
@@ -60,7 +62,7 @@ void registerStringCommands(CommandRegistry& reg) {
             return "ERR:wrong number of arguments for 'ttl'";
         Response res = db.ttl(args[0]);
         if (std::holds_alternative<long long>(res.data))
-            return "SUCC:" + std::to_string(std::get<long long>(res.data));
+            return "RESP::" + std::to_string(std::get<long long>(res.data)) + "\r\n";
         return "ERR:" + res.message;
     });
 
@@ -76,9 +78,9 @@ void registerStringCommands(CommandRegistry& reg) {
         }
         Response res = db.expire(args[0], ttlMs);
         if (res.status == Status::OK)
-            return "SUCC:1";
+            return "RESP::1\r\n";
         if (res.status == Status::KEY_NOT_FOUND)
-            return "SUCC:0";
+            return "RESP::0\r\n";
         return "ERR:" + res.message;
     });
 
@@ -88,7 +90,7 @@ void registerStringCommands(CommandRegistry& reg) {
             return "ERR:wrong number of arguments for 'append'";
         Response res = db.append(args[0], args[1]);
         if (res.status == Status::OK && std::holds_alternative<long long>(res.data))
-            return "SUCC:" + std::to_string(std::get<long long>(res.data));
+            return "RESP::" + std::to_string(std::get<long long>(res.data)) + "\r\n";
         return "ERR:" + res.message;
     });
 
@@ -98,7 +100,7 @@ void registerStringCommands(CommandRegistry& reg) {
             return "ERR:wrong number of arguments for 'strlen'";
         Response res = db.strlen(args[0]);
         if (std::holds_alternative<long long>(res.data))
-            return "SUCC:" + std::to_string(std::get<long long>(res.data));
+            return "RESP::" + std::to_string(std::get<long long>(res.data)) + "\r\n";
         return "ERR:" + res.message;
     });
 
@@ -115,9 +117,9 @@ void registerStringCommands(CommandRegistry& reg) {
                             }
                             Response res = db.expireAt(args[0], epochMs);
                             if (res.status == Status::OK)
-                                return "SUCC:1";
+                                return "RESP::1\r\n";
                             if (res.status == Status::KEY_NOT_FOUND)
-                                return "SUCC:0";
+                                return "RESP::0\r\n";
                             return "ERR:" + res.message;
                         });
 }
