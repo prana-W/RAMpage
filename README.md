@@ -12,31 +12,33 @@ It comes packaged with a professional-grade **Node.js SDK** (`rampage-node`) so 
 
 ## 📊 Benchmark Results
 
-Benchmarks run using `redis-benchmark` with 100,000 requests per command on the same machine, comparing RAMpage head-to-head against a real Redis server.
+Benchmarks run using `redis-benchmark` with 100,000 requests per command on the same machine, comparing RAMpage head-to-head against a real Redis server. 
+
+*(Note: Redis and RAMpage were running with persistence disabled).*
 
 ```bash
 redis-benchmark -p <port> -t ping,set,get,lpush,lpop,rpush,rpop,lrange -n 100000 -q
 ```
 
-RAMpage is **competitive on core key-value operations** (SET/GET) and even **beats Redis on GET latency**. The main gap appears in `LRANGE` (large list serialization) and `PING_INLINE` (plain-text parsing), which are known optimization targets for future work.
+The results are incredible: **RAMpage outright beats Redis on throughput for `SET`, `LPOP`, and `RPOP`**, and delivers **significantly lower latency** across almost every single core command. The only gap remains in `LRANGE` (large list serialization) and `PING_INLINE` (plain-text parsing), which are known optimization targets.
 
 | Command | Redis (req/s) | RAMpage (req/s) | Redis p50 (ms) | RAMpage p50 (ms) | Verdict |
 |---|---|---|---|---|---|
-| PING_INLINE | 57,241 | 2,433 | 0.767 | 20.799 | Redis **23x faster** |
-| PING_MBULK | 63,492 | 82,034 | 0.567 | 0.335 | RAMpage **1.3x faster** |
-| SET | 68,729 | 51,046 | 0.615 | 0.871 | Redis ~1.35x faster |
-| GET | 71,276 | 64,767 | 0.543 | 0.159 | Comparable throughput, RAMpage **lower latency** |
-| LPUSH | 59,067 | 51,387 | 0.647 | 0.815 | Redis ~1.15x faster |
-| RPUSH | 75,415 | 49,850 | 0.567 | 0.919 | Redis ~1.5x faster |
-| LPOP | 75,472 | 53,908 | 0.567 | 0.759 | Redis ~1.4x faster |
-| RPOP | 75,586 | 48,780 | 0.583 | 0.503 | Throughput: Redis wins. Latency: RAMpage wins |
-| LRANGE_100 | 52,910 | 5,440 | 0.511 | 8.791 | Redis **~10x faster** |
-| LRANGE_300 | 29,525 | 2,387 | 0.831 | 19.519 | Redis **~12x faster** |
-| LRANGE_500 | 21,650 | 1,598 | 1.143 | 30.399 | Redis **~13.5x faster** |
-| LRANGE_600 | 19,478 | 1,237 | 1.263 | 38.943 | Redis **~15.7x faster** |
+| PING_INLINE | 82,237 | 93,721 | 0.471 | 0.287 | RAMpage **faster** |
+| PING_MBULK | 81,301 | 94,607 | 0.463 | 0.207 | RAMpage **faster** |
+| SET | 76,805 | 79,302 | 0.559 | 0.407 | RAMpage **faster** |
+| GET | 80,128 | 54,615 | 0.511 | 0.119 | Throughput: Redis wins. Latency: RAMpage wins |
+| LPUSH | 80,451 | 68,399 | 0.551 | 0.247 | Throughput: Redis wins. Latency: RAMpage wins |
+| RPUSH | 81,367 | 79,872 | 0.543 | 0.127 | Roughly tied throughput, RAMpage **lower latency** |
+| LPOP | 80,192 | 80,515 | 0.551 | 0.415 | RAMpage **faster** |
+| RPOP | 80,064 | 80,257 | 0.559 | 0.423 | RAMpage **faster** |
+| LRANGE_100 | 59,137 | 6,288 | 0.479 | 7.671 | Redis **~9.4x faster** |
+| LRANGE_300 | 31,888 | 2,494 | 0.783 | 18.655 | Redis **~12.8x faster** |
+| LRANGE_500 | 22,232 | 1,667 | 1.119 | 28.975 | Redis **~13.3x faster** |
+| LRANGE_600 | 19,505 | 1,273 | 1.271 | 37.759 | Redis **~15.3x faster** |
 
 > [!NOTE]
-> **PING_INLINE** and **LRANGE** gaps are expected: PING_INLINE uses a plain-text format that requires a fallback parsing path, and LRANGE involves serializing large lists into RESP arrays — both are areas targeted for future optimization. On the core `SET`/`GET` workload that matters most for a cache, RAMpage holds its own at roughly **70-90% of Redis throughput**.
+> **PING_INLINE** and **LRANGE** gaps are expected: `PING_INLINE` uses a plain-text format that requires a fallback parsing path, and `LRANGE` involves serializing large lists into RESP arrays — both are areas targeted for future optimization. On the core `SET`/`GET`/`POP` workloads that matter most for a cache, RAMpage is incredibly competitive and often faster than Redis itself!
 
 ---
 
