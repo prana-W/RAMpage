@@ -47,9 +47,10 @@ void registerListCommands(CommandRegistry& reg) {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'lpop'";
         Response res = db.lpop(args[0]);
-        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data)) {
+        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data))
             return "SUCC:" + std::get<std::string>(res.data);
-        }
+        if (res.status == Status::KEY_NOT_FOUND)
+            return "SUCC:";  // nil — key/list not found
         return "ERR:" + res.message;
     });
 
@@ -57,9 +58,10 @@ void registerListCommands(CommandRegistry& reg) {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'rpop'";
         Response res = db.rpop(args[0]);
-        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data)) {
+        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data))
             return "SUCC:" + std::get<std::string>(res.data);
-        }
+        if (res.status == Status::KEY_NOT_FOUND)
+            return "SUCC:";  // nil — key/list not found
         return "ERR:" + res.message;
     });
 
@@ -83,9 +85,10 @@ void registerListCommands(CommandRegistry& reg) {
             return "ERR:index must be an integer";
         }
         Response res = db.lindex(args[0], index);
-        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data)) {
+        if (res.status == Status::OK && std::holds_alternative<std::string>(res.data))
             return "SUCC:" + std::get<std::string>(res.data);
-        }
+        if (res.status == Status::KEY_NOT_FOUND)
+            return "SUCC:";  // nil — index out of range or key not found
         return "ERR:" + res.message;
     });
 
