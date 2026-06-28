@@ -31,5 +31,5 @@ COPY --from=builder /app/build/rampage_cli /app/rampage_cli
 # Expose the default port
 EXPOSE 2006
 
-# Command to run the server
-ENTRYPOINT ["/app/rampage"]
+# Command to run the server with persistence enabled by default
+ENTRYPOINT ["/app/rampage", "--persist"]

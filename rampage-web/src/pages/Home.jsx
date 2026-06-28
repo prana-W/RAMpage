@@ -105,7 +105,7 @@ function Home() {
                         </p>
                     </div>
 
-                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
                         <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
                             <CardHeader>
                                 <Activity className="w-10 h-10 text-primary mb-4" />
@@ -145,18 +145,6 @@ function Home() {
                             </CardContent>
                         </Card>
 
-                        <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
-                            <CardHeader>
-                                <Cpu className="w-10 h-10 text-primary mb-4" />
-                                <CardTitle>Zero-Copy Memory</CardTitle>
-                                <CardDescription>Extreme Micro-Optimizations</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <p className="text-muted-foreground text-sm">
-                                    Uses <code>std::string_view</code> to pipe data straight from internal deques to the socket. Avoids <code>std::to_string</code> allocations via <code>&lt;charconv&gt;</code> for maximum throughput.
-                                </p>
-                            </CardContent>
-                        </Card>
                     </div>
                 </div>
             </section>
