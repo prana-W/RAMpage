@@ -11,7 +11,6 @@ struct ParsedCommand {
 
 class RESPParser {
    public:
- 
     static ParseResult parse(std::string& buf, ParsedCommand& out);
 
    private:

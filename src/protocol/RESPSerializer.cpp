@@ -3,7 +3,6 @@
 #include <sstream>
 #include <unordered_set>
 
-
 static const std::unordered_set<std::string> INTEGER_CMDS = {
     "APPEND", "STRLEN", "LLEN",     "TTL",      "PTTL", "LPUSH", "RPUSH",  "DEL",
     "EXISTS", "EXPIRE", "EXPIREAT", "EXPIRYAT", "INCR", "DECR",  "INCRBY", "DECRBY",
@@ -19,7 +18,6 @@ static const std::unordered_set<std::string> ARRAY_CMDS = {
     "SMEMBERS",
     "HGETALL",
 };
-
 
 std::string RESPSerializer::simpleString(const std::string& s) {
     return "+" + s + "\r\n";

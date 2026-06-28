@@ -6,7 +6,7 @@
 
 **RAMpage** is a Redis-inspired, high-performance in-memory database server implemented from scratch in C++. It rampages through reads and writes with ultra-low latency, leveraging modern Linux I/O via `epoll`.
 
-It comes packaged with a professional-grade **JavaScript SDK** (`rampage-js`) so you can integrate it directly into your Node.js backend seamlessly.
+It comes packaged with a professional-grade **Node.js SDK** (`rampage-node`) so you can integrate it directly into your backend seamlessly. By natively speaking the **RESP (REdis Serialization Protocol)**, RAMpage is 100% compatible with the official `redis-cli`, `redis-benchmark`, and any Redis client library.
 
 ---
 
@@ -14,13 +14,13 @@ It comes packaged with a professional-grade **JavaScript SDK** (`rampage-js`) so
 
 ### The C++ Database Server
 - **Ultra-Fast I/O Engine**: Built using Linux `epoll` for non-blocking, event-driven networking. Handles thousands of concurrent persistent TCP connections on a single thread with zero race conditions.
-- **Robust Custom Protocol**: A streamlined text protocol where every response is either `SUCC:<payload>` or `ERR:<message>`.
+- **Native RESP Protocol**: Speaks the exact same REdis Serialization Protocol used by Redis, making it compatible with the entire Redis ecosystem out of the box.
 - **String & List Operations**: Full support for Redis-like primitives (`SET`, `GET`, `DEL`, `LPUSH`, `RPOP`, `LRANGE`, etc.).
 - **TTL & Expiry**: Native support for key expiration (`EXPIRE`, `TTL`) automatically managed by the database.
 - **Persistence (AOF)**: All write commands are automatically persisted to an Append-Only File (`rampage.rampage`). On server restart, the log is fully replayed to restore in-memory state — no data loss.
 - **Interactive CLI**: Comes with a `rampage-cli` tool to interactively run commands against the server.
 
-### The JavaScript SDK (`rampage-js`)
+### The Node.js SDK (`rampage-node`)
 - **Native ESM**: Pure Node.js ES modules, ready for modern applications with zero external dependencies.
 - **Promise-Based**: `async/await` ready API (`const user = await client.get('user')`).
 - **Persistent Connection Management**: Maintains a single persistent TCP connection. Commands are queued securely and responses matched in-order.
@@ -71,29 +71,55 @@ docker run -p 2006:2006 -d --name rampage-instance rampage-server
 # docker run -p 3000:3000 -d --name rampage-instance rampage-server --port 3000
 ```
 
-### 2. Connect via CLI
+### 2. Connect via `redis-cli`
 
-In a separate terminal, you can interactively run commands against your Docker instance using the built-in CLI:
+Because RAMpage natively supports RESP, you can use the official `redis-cli` tool to interact with it:
+
 ```bash
-docker exec -it rampage-instance /app/rampage_cli
+redis-cli -p 2006
 ```
 ```text
-rampage-cli> set name "Alice"
+127.0.0.1:2006> SET name "Alice"
 OK
-rampage-cli> get name
+127.0.0.1:2006> GET name
 "Alice"
-rampage-cli> rpush tasks "Email Users"
+127.0.0.1:2006> RPUSH tasks "Email Users"
 (integer) 1
 ```
 
-### 3. Use the JavaScript SDK
+*(RAMpage also ships with a lightweight built-in CLI: `docker exec -it rampage-instance /app/rampage_cli`)*
 
-*(Note: I will later publish the JS-SDK to npm, so that the code can be easily installed via `npm install rampage-js`)*
+You can also test the database's throughput using the official benchmark tool:
+```bash
+redis-benchmark -p 2006 -t set,get -n 100000 -q
+```
 
-Add the SDK to your Node.js project:
+### 3. Use an existing Redis SDK (or our custom one)
+
+Because RAMpage uses the exact same wire protocol as Redis (RESP), you don't even need a custom SDK! You can use any standard Redis client (like `redis` in Node.js, `redis-py` in Python, or `go-redis` in Go). All you have to do is point the SDK to the RAMpage port (default `2006`) instead of the default Redis port (`6379`).
 
 ```js
-import { createClient } from './sdk/rampage-js/src/index.js'; // Soon: import { createClient } from 'rampage-js'
+// Using the official 'redis' npm package
+import { createClient } from 'redis';
+
+const client = createClient({ url: 'redis://127.0.0.1:2006' });
+await client.connect();
+await client.set('name', 'Alice');
+```
+
+> [!NOTE]  
+> **Command Support Caveat**: While RAMpage is protocol-compatible with Redis, it does not yet support every single Redis command. Currently, it supports core String and List operations. If you send an unsupported command, RAMpage will safely return an `ERR: unknown command` response.
+
+<br>
+
+Alternatively, RAMpage comes with its own educational Node.js SDK (`rampage-node`) that perfectly maps to the supported commands:
+
+*(Note: I will later publish the SDK to npm, so that the code can be easily installed via `npm install rampage-node`)*
+
+Add the custom SDK to your Node.js project:
+
+```js
+import { createClient } from './sdk/rampage-node/src/index.js'; // Soon: import { createClient } from 'rampage-node'
 
 async function main() {
   // 1. Initialize client
@@ -129,7 +155,7 @@ main();
   - `database/` — The in-memory data structures and logic.
   - `commands/` — Handlers bridging raw strings to the `Database` methods.
   - `persistence/` — The `PersistenceManager` handling AOF logging and replay.
-- **`sdk/rampage-js/`** — The Node.js client package.
+- **`sdk/rampage-node/`** — The Node.js client package.
 - **`tests/`** — Server tests and Node.js testing playground.
 - **`docs/`** — Internal design notes.
 
@@ -157,3 +183,10 @@ Writing to disk on every command in the main thread would stall client responses
 - **Consumer** (background flusher thread): sleeps on a `std::condition_variable` until entries appear, then **atomically swaps** the entire shared queue into a local queue (holding the mutex for ~1 nanosecond), releases the lock, and writes to disk at its own pace.
 
 The key insight is the **swap trick**: the mutex is held only for a pointer swap, not for any file I/O. The main thread is almost never blocked. This eliminates the producer/consumer race condition (`std::queue` is not thread-safe) while keeping disk writes completely off the hot path.
+
+### The RESP Network Protocol — 100% Redis Ecosystem Compatibility
+
+Instead of inventing a custom binary format, RAMpage natively implements the **REdis Serialization Protocol (RESP)**. 
+- **The Protocol**: All data sent over TCP is formatted into strict RESP types: Simple Strings (`+OK\r\n`), Errors (`-ERR\r\n`), Integers (`:1\r\n`), Bulk Strings (`$5\r\nhello\r\n`), and Arrays (`*2\r\n...`). 
+- **The Architecture**: RAMpage achieves this by cleanly separating the networking layer from the core database. A stateless `RESPParser` intercepts incoming TCP byte streams (handling pipelining and partial frames) and converts them to tokens. The database executes the command, and a `RESPSerializer` formats the internal result back into standard RESP bytes.
+- **Why it matters**: By perfectly mimicking Redis on the wire, RAMpage is instantly compatible with thousands of existing open-source tools. You don't need special drivers — any Node.js, Python, or Go Redis client can connect to RAMpage natively. It also allows us to stress-test the server using industry-standard tools like `redis-benchmark`.

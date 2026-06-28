@@ -1,6 +1,6 @@
-# rampage-js
+# rampage-node
 
-> Official JavaScript SDK for [RAMpage](https://github.com/prana-W/RAMpage) — a high-performance in-memory database with a Redis-like command surface.
+> Official Node.js SDK for [RAMpage](https://github.com/prana-W/RAMpage) — a high-performance in-memory database with a Redis-like command surface.
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![ESM](https://img.shields.io/badge/module-ESM-blue)](https://nodejs.org/api/esm.html)

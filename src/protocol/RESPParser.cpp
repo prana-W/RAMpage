@@ -2,7 +2,6 @@
 
 #include <sstream>
 
-
 static ParseResult parseArray(std::string& buf, ParsedCommand& out) {
     // Find the end of the count line: *<N>\r\n
     size_t firstCRLF = buf.find("\r\n");

@@ -78,7 +78,6 @@ void Server::removeClient(int clientFd) {
     std::cout << "[server] Client disconnected (fd=" << clientFd << ")\n";
 }
 
-
 void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db,
                                  CommandRegistry& registry) {
     while (true) {

@@ -3,10 +3,8 @@
 #include <string>
 #include <vector>
 
-
 class RESPSerializer {
    public:
-
     static std::string serialize(const std::string& internalResult, const std::string& cmdName);
 
     static std::string simpleString(const std::string& s);            // +s\r\n

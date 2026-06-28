@@ -286,3 +286,25 @@ We updated the command handlers slightly to match Redis semantics perfectly:
 ### Summary
 By cleanly separating the networking protocol (RESP) from the database logic, we made RAMpage highly compatible with industry-standard tools without rewriting the core engine!
 
+## Phase - 7.1: Updating the Node.js SDK for RESP
+
+Because the RAMpage server now speaks RESP, our custom Node.js SDK (`rampage-js`) broke. We took the opportunity to rename it to follow better conventions and rewrote it to speak proper RESP.
+
+**1. Renamed to `rampage-node`**
+We renamed the directory from `sdk/rampage-js` to `sdk/rampage-node` and updated the `package.json` name to match.
+
+**2. `src/connection.js` (The core parser update)**
+- Replaced the old `\n`-based line buffer with a new, robust `RespReader` class.
+- The `RespReader` accumulates raw TCP chunks and statefully parses RESP frames (Simple Strings `+`, Errors `-`, Integers `:`, Bulk Strings `$`, and Arrays `*`).
+- In `sendCommand(args)`, we no longer send a space-separated string. We encode the command as a RESP Array frame (`*N\r\n$len\r\narg\r\n...`) and send that directly to the server.
+
+**3. `src/parser.js` (Thin type-assertion layer)**
+- We deleted all the old logic that was parsing the internal `SUCC:/ERR:` strings.
+- Now, it simply receives the fully decoded JS value (e.g. `1`, `'OK'`, `['a', 'b']`) from the `RespReader` and acts as a type-assertion layer (e.g. `parseInteger` ensures it actually got a number).
+
+**4. `src/client.js` (Command definitions)**
+- We removed the `quoteIfNeeded` function entirely! RESP natively handles multi-word arguments because every string explicitly declares its byte length.
+- Every method (e.g. `set`, `get`) was updated to pass an array of arguments (e.g. `['SET', 'key', 'value']`) into `_send()` instead of a single string.
+- The `DEL` and `EXPIRE` methods were updated to expect numbers (`1` or `0`) instead of plain strings, matching the new Redis-compatible backend behavior.
+
+The `rampage-node` SDK is now a fully-featured RESP client perfectly aligned with how real Redis drivers work!
