@@ -23,7 +23,7 @@ function Footer() {
                 </div>
                 <div className="flex items-center space-x-2">
                      <Button variant="ghost" size="icon" asChild>
-                        <a href="https://github.com/prana-w/rampage" target="_blank" rel="noreferrer">
+                        <a href="https://github.com/prana-w" target="_blank" rel="noreferrer">
                             <Github className="h-5 w-5 text-muted-foreground" />
                             <span className="sr-only">GitHub</span>
                         </a>

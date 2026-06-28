@@ -1,4 +1,4 @@
-import {Home, About, NotFound, Commands} from './pages';
+import {Home, About, NotFound, Commands, GettingStarted} from './pages';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { ThemeProvider } from "@/components/theme-provider"
 import Layout from './Layout.jsx';
@@ -22,6 +22,10 @@ const router = createBrowserRouter([
             {
                 path: 'commands',
                 element: <Commands />,
+            },
+            {
+                path: 'getting-started',
+                element: <GettingStarted />,
             },
             {
                 path: '*',

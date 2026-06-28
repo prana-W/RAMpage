@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Zap, Database, ShieldCheck, Activity } from 'lucide-react';
+import { ArrowRight, Zap, Database, ShieldCheck, Activity, Cpu } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 
@@ -58,6 +58,7 @@ function Home() {
                                     <th className="px-6 py-4 font-semibold">Command</th>
                                     <th className="px-6 py-4 font-semibold text-right">Redis (req/s)</th>
                                     <th className="px-6 py-4 font-semibold text-right">RAMpage (req/s)</th>
+                                    <th className="px-6 py-4 font-semibold text-right">Throughput Verdict</th>
                                     <th className="px-6 py-4 font-semibold text-right">Redis p50 (ms)</th>
                                     <th className="px-6 py-4 font-semibold text-right">RAMpage p50 (ms)</th>
                                     <th className="px-6 py-4 font-semibold">Latency Verdict</th>
@@ -65,21 +66,27 @@ function Home() {
                             </thead>
                             <tbody className="divide-y">
                                 {[
-                                    { cmd: "PING_INLINE", redisT: "93,633", ramT: "89,047", redisL: "0.407", ramL: "0.295", verdict: "RAMpage 1.4x faster" },
-                                    { cmd: "SET", redisT: "97,561", ramT: "81,833", redisL: "0.455", ramL: "0.255", verdict: "RAMpage 1.8x faster" },
-                                    { cmd: "GET", redisT: "99,305", ramT: "82,305", redisL: "0.415", ramL: "0.335", verdict: "RAMpage 1.2x faster" },
-                                    { cmd: "LPUSH", redisT: "97,371", ramT: "82,305", redisL: "0.447", ramL: "0.095", verdict: "RAMpage 4.7x faster" },
-                                    { cmd: "RPUSH", redisT: "98,425", ramT: "54,377", redisL: "0.447", ramL: "0.103", verdict: "RAMpage 4.3x faster" },
-                                    { cmd: "LPOP", redisT: "96,993", ramT: "81,235", redisL: "0.455", ramL: "0.095", verdict: "RAMpage 4.8x faster" },
-                                    { cmd: "LRANGE_100", redisT: "67,659", ramT: "21,906", redisL: "0.391", ramL: "2.151", verdict: "Redis 5.5x faster" },
+                                    { cmd: "PING_INLINE", redisT: "93,633", ramT: "89,047", tVerdict: "Redis 1.05x faster", redisL: "0.407", ramL: "0.295", verdict: "RAMpage 1.4x faster" },
+                                    { cmd: "PING_MBULK", redisT: "100,806", ramT: "86,207", tVerdict: "Redis 1.2x faster", redisL: "0.391", ramL: "0.223", verdict: "RAMpage 1.8x faster" },
+                                    { cmd: "SET", redisT: "97,561", ramT: "81,833", tVerdict: "Redis 1.2x faster", redisL: "0.455", ramL: "0.255", verdict: "RAMpage 1.8x faster" },
+                                    { cmd: "GET", redisT: "99,305", ramT: "82,305", tVerdict: "Redis 1.2x faster", redisL: "0.415", ramL: "0.335", verdict: "RAMpage 1.2x faster" },
+                                    { cmd: "LPUSH", redisT: "97,371", ramT: "82,305", tVerdict: "Redis 1.2x faster", redisL: "0.447", ramL: "0.095", verdict: "RAMpage 4.7x faster" },
+                                    { cmd: "RPUSH", redisT: "98,425", ramT: "54,377", tVerdict: "Redis 1.8x faster", redisL: "0.447", ramL: "0.103", verdict: "RAMpage 4.3x faster" },
+                                    { cmd: "LPOP", redisT: "96,993", ramT: "81,235", tVerdict: "Redis 1.2x faster", redisL: "0.455", ramL: "0.095", verdict: "RAMpage 4.8x faster" },
+                                    { cmd: "RPOP", redisT: "94,429", ramT: "82,305", tVerdict: "Redis 1.1x faster", redisL: "0.463", ramL: "0.127", verdict: "RAMpage 3.6x faster" },
+                                    { cmd: "LRANGE_100", redisT: "67,659", ramT: "21,906", tVerdict: "Redis 3.1x faster", redisL: "0.391", ramL: "2.151", verdict: "Redis 5.5x faster" },
+                                    { cmd: "LRANGE_300", redisT: "38,820", ramT: "8,678", tVerdict: "Redis 4.5x faster", redisL: "0.647", ramL: "5.455", verdict: "Redis 8.4x faster" },
+                                    { cmd: "LRANGE_500", redisT: "26,062", ramT: "5,564", tVerdict: "Redis 4.7x faster", redisL: "0.959", ramL: "8.711", verdict: "Redis 9.1x faster" },
+                                    { cmd: "LRANGE_600", redisT: "21,730", ramT: "4,645", tVerdict: "Redis 4.7x faster", redisL: "1.119", ramL: "10.279", verdict: "Redis 9.2x faster" },
                                 ].map((row, i) => (
                                     <tr key={i} className="hover:bg-muted/30 transition-colors">
                                         <td className="px-6 py-4 font-medium">{row.cmd}</td>
                                         <td className="px-6 py-4 text-right text-muted-foreground">{row.redisT}</td>
                                         <td className="px-6 py-4 text-right">{row.ramT}</td>
+                                        <td className={`px-6 py-4 text-right font-semibold ${row.tVerdict.includes('RAMpage') ? 'text-primary' : 'text-muted-foreground'}`}>{row.tVerdict}</td>
                                         <td className="px-6 py-4 text-right text-muted-foreground">{row.redisL}</td>
-                                        <td className="px-6 py-4 text-right font-medium text-primary">{row.ramL}</td>
-                                        <td className="px-6 py-4 text-primary font-semibold">{row.verdict}</td>
+                                        <td className="px-6 py-4 text-right font-medium">{row.ramL}</td>
+                                        <td className={`px-6 py-4 font-semibold ${row.verdict.includes('RAMpage') ? 'text-primary' : 'text-destructive/80'}`}>{row.verdict}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -98,7 +105,7 @@ function Home() {
                         </p>
                     </div>
 
-                    <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
                         <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
                             <CardHeader>
                                 <Activity className="w-10 h-10 text-primary mb-4" />
@@ -106,8 +113,8 @@ function Home() {
                                 <CardDescription>Powered by Linux epoll</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-muted-foreground">
-                                    Non-blocking, event-driven networking handles thousands of concurrent persistent TCP connections on a single thread with absolutely zero race conditions.
+                                <p className="text-muted-foreground text-sm">
+                                    Non-blocking, event-driven networking handles thousands of concurrent persistent TCP connections on a single thread with absolutely zero race conditions on the hot path.
                                 </p>
                             </CardContent>
                         </Card>
@@ -119,8 +126,8 @@ function Home() {
                                 <CardDescription>Drop-in Replacement</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-muted-foreground">
-                                    Speaks the exact same REdis Serialization Protocol used by Redis. It is 100% compatible with existing Redis SDKs across Node.js, Python, and Go.
+                                <p className="text-muted-foreground text-sm">
+                                    Features a custom RESP parser with greedy pipelining. It is 100% compatible with existing Redis SDKs across Node.js, Python, and Go, right out of the box.
                                 </p>
                             </CardContent>
                         </Card>
@@ -132,14 +139,29 @@ function Home() {
                                 <CardDescription>Zero Data Loss</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-muted-foreground">
-                                    Write commands are securely appended to an Append-Only File. The lock-free background flusher ensures disk I/O never blocks the main hot path.
+                                <p className="text-muted-foreground text-sm">
+                                    Write commands are securely appended to an Append-Only File. A dedicated background flusher thread uses condition variables to ensure disk I/O never blocks the main loop.
+                                </p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
+                            <CardHeader>
+                                <Cpu className="w-10 h-10 text-primary mb-4" />
+                                <CardTitle>Zero-Copy Memory</CardTitle>
+                                <CardDescription>Extreme Micro-Optimizations</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-muted-foreground text-sm">
+                                    Uses <code>std::string_view</code> to pipe data straight from internal deques to the socket. Avoids <code>std::to_string</code> allocations via <code>&lt;charconv&gt;</code> for maximum throughput.
                                 </p>
                             </CardContent>
                         </Card>
                     </div>
                 </div>
             </section>
+
+
         </div>
     );
 }

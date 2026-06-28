@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
+import { Copy, Check } from 'lucide-react';
+import { Button } from '../components/ui/button';
 
 function Commands() {
     const commands = [
@@ -21,6 +23,14 @@ function Commands() {
         { name: "LRANGE", usage: "LRANGE key start stop", desc: "Returns the specified elements of the list stored at key. The offsets start and stop are zero-based indexes." },
     ];
 
+    const [copiedCmd, setCopiedCmd] = useState(null);
+
+    const handleCopy = (text, name) => {
+        navigator.clipboard.writeText(text);
+        setCopiedCmd(name);
+        setTimeout(() => setCopiedCmd(null), 2000);
+    };
+
     return (
         <div className="container mx-auto px-4 py-12 flex-1">
             <div className="mb-12 max-w-2xl">
@@ -38,11 +48,20 @@ function Commands() {
                         <CardHeader>
                             <div className="flex justify-between items-start mb-2">
                                 <CardTitle className="text-2xl text-primary font-bold">{cmd.name}</CardTitle>
-                                <span className="inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80 font-mono">O(1)</span>
                             </div>
-                            <code className="text-sm bg-muted/50 p-2 rounded-md font-mono text-muted-foreground block border">
-                                {cmd.usage}
-                            </code>
+                            <div className="relative group">
+                                <code className="text-sm bg-muted/50 p-2 pr-10 rounded-md font-mono text-muted-foreground block border">
+                                    {cmd.usage}
+                                </code>
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="absolute right-1 top-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => handleCopy(cmd.usage, cmd.name)}
+                                >
+                                    {copiedCmd === cmd.name ? <Check className="h-3 w-3 text-primary" /> : <Copy className="h-3 w-3" />}
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent className="flex-1 text-muted-foreground">
                             {cmd.desc}

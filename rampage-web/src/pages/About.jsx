@@ -22,21 +22,53 @@ function About() {
                         The primary goal of RAMpage was to deeply understand and master high-performance networking, low-level memory management, and database architectures. By bypassing the standard C++ networking abstractions and building directly on top of Linux kernel syscalls (<code>epoll</code>), RAMpage achieves phenomenal throughput and latency.
                     </p>
 
-                    <h2 className="text-2xl font-bold text-foreground mt-10 mb-4">Core Architecture</h2>
-                    <ul className="list-disc pl-6 space-y-2">
-                        <li>
-                            <strong>Event-Driven I/O:</strong> Built on <code>epoll</code>, the server runs on a single thread and uses non-blocking sockets. This eliminates the need for expensive context switches and mutex locks on the hot path.
-                        </li>
-                        <li>
-                            <strong>Zero-Copy Networking:</strong> Commands like <code>LRANGE</code> use advanced C++ features like <code>std::string_view</code> to pipe data straight from the internal memory data structures to the TCP socket without a single memory reallocation.
-                        </li>
-                        <li>
-                            <strong>AOF Persistence:</strong> Data durability is guaranteed through an Append-Only File (AOF). To prevent disk I/O from blocking the server, the PersistenceManager uses a lock-free background flusher thread to safely persist commands to disk.
-                        </li>
-                        <li>
-                            <strong>Native RESP Protocol:</strong> RAMpage speaks the REdis Serialization Protocol natively. This means any standard Redis client or SDK (Node.js, Go, Python) can interact with RAMpage perfectly out-of-the-box.
-                        </li>
-                    </ul>
+                    <h2 className="text-2xl font-bold text-foreground mt-10 mb-4">Under the Hood: How it Works</h2>
+                    
+                    <div className="space-y-8">
+                        <div>
+                            <h3 className="text-xl font-semibold text-primary mb-2">1. Event-Driven I/O Multiplexing</h3>
+                            <p>
+                                RAMpage relies heavily on <strong>Linux epoll</strong>. Instead of spawning an expensive operating system thread for every connected client, the server operates on a single main thread. It watches hundreds of non-blocking TCP sockets simultaneously and only wakes up to process I/O when a socket is actually ready. Because the hot path is entirely single-threaded, there are <strong>zero mutexes or race conditions</strong> when accessing the core hash map.
+                            </p>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xl font-semibold text-primary mb-2">2. Modular Command Registry</h3>
+                            <p>
+                                The architecture avoids massive <code>if-else</code> blocks. A central <code>CommandRegistry</code> maintains an <code>std::unordered_map</code> that maps command strings (e.g. "SET", "LRANGE") directly to C++ lambda functions. This plugin-like architecture makes adding new commands trivial without ever touching the core networking loop.
+                            </p>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xl font-semibold text-primary mb-2">3. Extreme Micro-Optimizations</h3>
+                            <p>
+                                After profiling, RAMpage was aggressively optimized to eliminate hidden C++ overheads, allowing it to outperform Redis on heavy workloads like <code>LRANGE</code>:
+                            </p>
+                            <ul className="list-disc pl-6 mt-2 space-y-1">
+                                <li><strong>Zero-Copy:</strong> Uses <code>std::string_view</code> to pipe data straight from the internal <code>std::deque</code> into the TCP socket without heap allocations.</li>
+                                <li><strong>Direct RESP Builds:</strong> Command handlers bypass intermediate serialization by constructing raw RESP wire bytes directly.</li>
+                                <li><strong>No std::to_string:</strong> Uses C++17's <code>&lt;charconv&gt;</code> to serialize numbers without dynamic memory allocation.</li>
+                                <li><strong>Batched Syscalls:</strong> Implements greedy pipelining to batch dozens of commands into a single `send()` syscall.</li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xl font-semibold text-primary mb-2">4. Non-Blocking AOF Persistence</h3>
+                            <p>
+                                Data durability is guaranteed through an Append-Only File (AOF). To prevent disk I/O from blocking the blazing-fast main thread, the <code>PersistenceManager</code> uses the classic Producer-Consumer pattern. 
+                            </p>
+                            <p className="mt-2">
+                                The main thread pushes commands to a shared queue under a microsecond <code>std::mutex</code> lock and rings a <code>std::condition_variable</code>. A dedicated background flusher thread wakes up, performs an <strong>O(1) pointer swap</strong> to steal the queue contents into a local variable, releases the lock instantly, and handles the slow disk write privately. The main thread is never blocked waiting for the disk!
+                            </p>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xl font-semibold text-primary mb-2">5. Native RESP Protocol</h3>
+                            <p>
+                                RAMpage features a custom RESP (REdis Serialization Protocol) parser with partial frame buffering. This allows any standard Redis client or SDK (Node.js, Go, Python) or tool like <code>redis-benchmark</code> to interact with RAMpage perfectly out-of-the-box.
+                            </p>
+                        </div>
+                    </div>
 
                     <div className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4">
                         <p className="text-sm font-medium">

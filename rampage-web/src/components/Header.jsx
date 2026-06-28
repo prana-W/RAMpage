@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Github, Database } from 'lucide-react';
+import { Github, Database, Star } from 'lucide-react';
 import { Button } from './ui/button';
 import { useTheme } from './theme-provider';
 
@@ -22,6 +22,12 @@ function Header() {
                             Home
                         </Link>
                         <Link
+                            to="/getting-started"
+                            className="transition-colors hover:text-foreground/80 text-foreground/60 font-medium whitespace-nowrap"
+                        >
+                            Getting Started
+                        </Link>
+                        <Link
                             to="/commands"
                             className="transition-colors hover:text-foreground/80 text-foreground/60 font-medium"
                         >
@@ -35,11 +41,17 @@ function Header() {
                         </Link>
                     </nav>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-4">
                     <Button variant="ghost" size="icon" asChild>
                         <a href="https://github.com/prana-w/rampage" target="_blank" rel="noreferrer">
                             <Github className="h-5 w-5" />
                             <span className="sr-only">GitHub</span>
+                        </a>
+                    </Button>
+                    <Button asChild size="sm" className="hidden sm:flex items-center gap-2 font-semibold">
+                        <a href="https://github.com/prana-w/rampage" target="_blank" rel="noreferrer">
+                            <Star className="h-4 w-4 fill-primary-foreground" />
+                            Star Now
                         </a>
                     </Button>
                 </div>
