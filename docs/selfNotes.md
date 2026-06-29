@@ -426,3 +426,54 @@ Even after zero-copying the vectors, C++ was still hiding major runtime overhead
 3. **Eliminated Output Buffer Reallocations**: `redis-benchmark` pipelines up to 16 commands at once, producing ~160KB of data for `LRANGE_600`. `std::string outBuf` in `Server.cpp` was forced to reallocate its internal buffer over 10 times per pipeline batch. We added `outBuf.reserve(128 * 1024)` at the top of the function to eliminate this.
 4. **Eliminated `std::deque` Index Arithmetic**: We changed the `for` loop in `Database::lrange` from `deq[i]` to `auto it = deq.begin() + start; ++it`. Deque indexing requires modulo arithmetic on every lookup; iterators just use simple pointer increments.
 5. **Global Serializer Bypass**: We went back and updated *all* other commands (`SET`, `GET`, `PUSH`, `POP`, etc.) in `StringCommands.cpp` and `ListCommands.cpp`. Instead of returning `"SUCC:"` (which forces `RESPSerializer::serialize` to allocate a temporary string and rebuild the output), every command now builds and returns the raw `RESP:` bytes directly. This gives a massive free throughput boost across the board by completely eliminating the `RESPSerializer` from the hot path for all successful commands.
+
+# Phase - 9 (Pub/Sub)
+
+We implemented a full Redis-compatible Pub/Sub engine. This includes exact channel subscriptions (`SUBSCRIBE`, `UNSUBSCRIBE`), pattern-based subscriptions (`PSUBSCRIBE`, `PUNSUBSCRIBE`), publishing messages (`PUBLISH`), and cluster introspection (`PUBSUB CHANNELS/NUMSUB/NUMPAT`). 
+
+## The Core Challenge
+Redis Pub/Sub fundamentally breaks the standard client-server **Request-Response** model.
+In normal operation: Client sends a command -> Server processes it -> Server sends a response.
+In Pub/Sub:
+1. Client A sends `SUBSCRIBE` and enters a special "Subscriber Mode".
+2. Client B sends `PUBLISH`.
+3. The server asynchronously pushes a message to Client A, without Client A requesting it.
+
+This means the server must maintain state about which clients are listening to what, and command handlers need the ability to "push" data directly to specific client sockets.
+
+## What We Changed (Architecture Flow)
+
+### 1. `PubSubManager` (The State Registry)
+We created a dedicated `PubSubManager` class (`src/pubsub/PubSubManager.h`) to manage all subscription state.
+- **Exact Channels**: Maps `channel_name -> set<client_fd>` and reverse `client_fd -> set<channel_name>`.
+- **Pattern Channels**: Maps `glob_pattern -> set<client_fd>` and reverse.
+- **Publishing**: The `publish()` method iterates through the matching sockets, formats the payload into a standard RESP push array (using `RESPSerializer::pushMessage`), and calls the OS-level `send(fd, ...)` directly to fan-out the message to all subscribers instantly.
+
+### 2. Threading `clientFd` into Command Handlers
+Previously, command handlers only knew about the `Database` and the arguments (`std::vector<std::string>& args`). They didn't know *who* they were talking to.
+To let `SUBSCRIBE` register the correct client, we changed the fundamental `CommandHandler` signature in `CommandRegistry.h`:
+```cpp
+// Before
+using CommandHandler = std::function<std::string(Database&, std::vector<std::string>&)>;
+
+// After
+using CommandHandler = std::function<std::string(Database&, int clientFd, std::vector<std::string>&)>;
+```
+We updated all 20+ existing commands in `StringCommands.cpp` and `ListCommands.cpp` to accept (and ignore) this new `clientFd` parameter.
+
+### 3. Subscriber Context (The `Server` Loop)
+When a client subscribes to a channel, Redis dictates they enter a special "Subscriber Context". While in this state, they are forbidden from sending normal commands (like `SET` or `GET`).
+In `Server::processClientBuffer`, we added a check:
+```cpp
+if (pubSub_.isSubscriber(clientFd)) {
+    // Only allow (P)SUBSCRIBE, (P)UNSUBSCRIBE, PING, QUIT
+}
+```
+Furthermore, when a client disconnects, `Server::removeClient` now explicitly calls `pubSub_.unsubscribeAll(clientFd)` to clean up the socket from the registry and prevent the publisher from trying to write to dead file descriptors.
+
+### 4. Direct RESP Formatting
+Because Pub/Sub relies on pushing non-standard arrays (like `*3\r\n$9\r\nsubscribe...`), we couldn't use the standard `SUCC:` prefix. Instead, the `SUBSCRIBE` and `UNSUBSCRIBE` handlers use the `RESP:` prefix to bypass the serializer completely and send the raw byte stream back to the client.
+
+## Why We Did It This Way
+- **Zero-Blocking Fan-Out**: By calling `send()` directly inside `PubSubManager::publish()`, we fan out messages immediately on the publisher's thread cycle, avoiding the need for complex message queues or background threads. Our epoll event loop handles this seamlessly.
+- **Explicit Separation of Concerns**: Keeping `PubSubManager` entirely separate from the `Database` ensures that ephemeral Pub/Sub traffic is cleanly isolated from persistent key-value data. This implicitly ensures that `PUBLISH` events never pollute the Append-Only File (AOF).

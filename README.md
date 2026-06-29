@@ -49,6 +49,7 @@ The results are incredible: **RAMpage delivers significantly lower latency** acr
 - **Native RESP Protocol**: Speaks the exact same REdis Serialization Protocol used by Redis, making it compatible with the entire Redis ecosystem out of the box.
 - **String & List Operations**: Full support for Redis-like primitives (`SET`, `GET`, `DEL`, `LPUSH`, `RPOP`, `LRANGE`, etc.).
 - **TTL & Expiry**: Native support for key expiration (`EXPIRE`, `TTL`) automatically managed by the database.
+- **Pub/Sub Messaging**: Fully compatible publish/subscribe engine supporting exact channels (`SUBSCRIBE`) and glob-style pattern matching (`PSUBSCRIBE`).
 - **Persistence (AOF)**: All write commands are automatically persisted to an Append-Only File (`rampage.rampage`). On server restart, the log is fully replayed to restore in-memory state — no data loss.
 - **Interactive CLI**: Comes with a `rampage-cli` tool to interactively run commands against the server.
 
@@ -75,6 +76,14 @@ The results are incredible: **RAMpage delivers significantly lower latency** acr
 - `LINDEX <key> <index>`
 - `LSET <key> <index> <value>`
 - `LRANGE <key> <start> <stop>`
+
+**Pub/Sub**:
+- `SUBSCRIBE <channel> [channel ...]`
+- `UNSUBSCRIBE [channel [channel ...]]`
+- `PSUBSCRIBE <pattern> [pattern ...]`
+- `PUNSUBSCRIBE [pattern [pattern ...]]`
+- `PUBLISH <channel> <message>`
+- `PUBSUB <subcommand> [args]`
 
 ---
 

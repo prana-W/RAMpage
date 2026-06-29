@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Zap, Database, ShieldCheck, Activity, Cpu } from 'lucide-react';
+import { ArrowRight, Zap, Database, ShieldCheck, Activity, Cpu, MessageSquare } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 
@@ -105,7 +105,7 @@ function Home() {
                         </p>
                     </div>
 
-                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
                         <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
                             <CardHeader>
                                 <Activity className="w-10 h-10 text-primary mb-4" />
@@ -141,6 +141,19 @@ function Home() {
                             <CardContent>
                                 <p className="text-muted-foreground text-sm">
                                     Write commands are securely appended to an Append-Only File. A dedicated background flusher thread uses condition variables to ensure disk I/O never blocks the main loop.
+                                </p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-primary/20 shadow-sm hover:shadow-md transition-shadow">
+                            <CardHeader>
+                                <MessageSquare className="w-10 h-10 text-primary mb-4" />
+                                <CardTitle>Pub/Sub Messaging</CardTitle>
+                                <CardDescription>Real-time Fan-out</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-muted-foreground text-sm">
+                                    Fully compatible publish/subscribe engine supporting exact channels and glob-style pattern matching with zero-blocking socket pushes.
                                 </p>
                             </CardContent>
                         </Card>

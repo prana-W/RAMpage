@@ -63,7 +63,17 @@ function About() {
                         </div>
 
                         <div>
-                            <h3 className="text-xl font-semibold text-primary mb-2">5. Native RESP Protocol</h3>
+                            <h3 className="text-xl font-semibold text-primary mb-2">5. Real-Time Pub/Sub Engine</h3>
+                            <p>
+                                RAMpage fully supports Redis-compatible Publish/Subscribe messaging. This required completely breaking the standard Request-Response paradigm. The server maintains a strict "Subscriber Mode" context for clients, mapping exact channels and glob-style patterns directly to socket file descriptors.
+                            </p>
+                            <p className="mt-2">
+                                When a <code>PUBLISH</code> command is received, the <code>PubSubManager</code> performs a zero-blocking fan-out by proactively formatting the payload as a RESP push array and calling the OS-level <code>send()</code> directly on the publisher's thread cycle. This ensures messages are instantly broadcast to all subscribers without relying on slow background queues, while explicitly bypassing the AOF persistence layer to keep ephemeral traffic out of the data log.
+                            </p>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xl font-semibold text-primary mb-2">6. Native RESP Protocol</h3>
                             <p>
                                 RAMpage features a custom RESP (REdis Serialization Protocol) parser with partial frame buffering. This allows any standard Redis client or SDK (Node.js, Go, Python) or tool like <code>redis-benchmark</code> to interact with RAMpage perfectly out-of-the-box.
                             </p>
