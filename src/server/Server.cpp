@@ -20,7 +20,7 @@
 
 static const int MAX_EVENTS = 64;
 
-Server::Server(int p) : port(p), serverFd(-1), epollFd(-1) {
+Server::Server(int p, PubSubManager& pubSub) : port(p), serverFd(-1), epollFd(-1), pubSub_(pubSub) {
 }
 
 Server::~Server() {
@@ -73,6 +73,8 @@ bool Server::addToEpoll(int fd) {
 }
 
 void Server::removeClient(int clientFd) {
+    pubSub_.unsubscribeAll(clientFd);
+    pubSub_.punsubscribeAll(clientFd);
     epoll_ctl(epollFd, EPOLL_CTL_DEL, clientFd, nullptr);
     close(clientFd);
     std::cout << "[server] Client disconnected (fd=" << clientFd << ")\n";
@@ -116,8 +118,19 @@ void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db
             return;
         }
 
+        // Check subscriber mode
+        if (pubSub_.isSubscriber(clientFd)) {
+            if (cmdName != "SUBSCRIBE" && cmdName != "UNSUBSCRIBE" && cmdName != "PSUBSCRIBE" &&
+                cmdName != "PUNSUBSCRIBE" && cmdName != "PING" && cmdName != "QUIT" &&
+                cmdName != "EXIT") {
+                outBuf += RESPSerializer::errorMsg(
+                    "only (P)SUBSCRIBE / (P)UNSUBSCRIBE / PING / QUIT allowed in this context");
+                continue;
+            }
+        }
+
         // Dispatch through the command registry
-        std::string internalResult = registry.execute(db, cmd.args);
+        std::string internalResult = registry.execute(db, clientFd, cmd.args);
 
         // "RESP:" prefix = pre-serialized RESP bytes, send as-is (used by LRANGE)
         if (internalResult.size() >= 5 && internalResult.compare(0, 5, "RESP:") == 0) {

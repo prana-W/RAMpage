@@ -2,8 +2,6 @@
 
 #include <sys/socket.h>
 
-#include <algorithm>
-
 #include "../protocol/RESPSerializer.h"
 
 // Basic glob matcher for '*' and '?'

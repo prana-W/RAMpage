@@ -33,10 +33,12 @@ add_library(RAMpageCore
     src/commands/CommandRegistry.cpp
     src/commands/StringCommands.cpp
     src/commands/ListCommands.cpp
+    src/commands/PubSubCommands.cpp
     src/server/Server.cpp
     src/persistence/PersistenceManager.cpp
     src/protocol/RESPParser.cpp
     src/protocol/RESPSerializer.cpp
+    src/pubsub/PubSubManager.cpp
 )
 
 find_package(Threads REQUIRED)

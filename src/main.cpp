@@ -5,8 +5,10 @@
 
 #include "./commands/CommandModules.h"
 #include "./commands/CommandRegistry.h"
+#include "./commands/PubSubCommands.h"
 #include "./database/Database.h"
 #include "./persistence/PersistenceManager.h"
+#include "./pubsub/PubSubManager.h"
 #include "./server/Server.h"
 
 int main(int argc, char* argv[]) {
@@ -39,6 +41,9 @@ int main(int argc, char* argv[]) {
     registerStringCommands(registry);
     registerListCommands(registry);
 
+    PubSubManager pubSub;
+    registerPubSubCommands(registry, pubSub);
+
     std::unique_ptr<PersistenceManager> pm;
     if (persistEnabled) {
         pm = std::make_unique<PersistenceManager>(aofPath);
@@ -49,7 +54,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "[server] RAMpage starting on port " << port << " ...\n";
-    Server server(port);
+    Server server(port, pubSub);
     server.start(db, registry);
 
     return 0;
