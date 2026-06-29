@@ -12,6 +12,25 @@ void registerStringCommands(CommandRegistry& reg) {
             return "RESP:$" + std::to_string(args[0].size()) + "\r\n" + args[0] + "\r\n";
         });
 
+    // HELLO [proto] — Handshake command required by modern Redis clients (e.g. node-redis v4)
+    reg.registerCommand("HELLO",
+                        [](Database&, int clientFd, std::vector<std::string>& args) -> std::string {
+                            return "RESP:*14\r\n"
+                                   "$6\r\nserver\r\n$7\r\nrampage\r\n"
+                                   "$7\r\nversion\r\n$3\r\n1.0\r\n"
+                                   "$5\r\nproto\r\n:2\r\n"
+                                   "$2\r\nid\r\n:1\r\n"
+                                   "$4\r\nmode\r\n$10\r\nstandalone\r\n"
+                                   "$4\r\nrole\r\n$6\r\nmaster\r\n"
+                                   "$7\r\nmodules\r\n*0\r\n";
+                        });
+
+    // CLIENT — Dummy command to satisfy modern clients sending CLIENT SETINFO
+    reg.registerCommand("CLIENT",
+                        [](Database&, int clientFd, std::vector<std::string>& args) -> std::string {
+                            return "RESP:+OK\r\n";
+                        });
+
     // SET key value [ttlSeconds]
     reg.registerCommand(
         "SET", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
