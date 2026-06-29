@@ -35,7 +35,7 @@ bool PubSubManager::matchPattern(const std::string& pattern, const std::string& 
 int PubSubManager::subscribe(int clientFd, const std::string& channel) {
     channelToSubscribers[channel].insert(clientFd);
     clientToChannels[clientFd].insert(channel);
-    return clientToChannels[clientFd].size() + clientToPatterns[clientFd].size();
+    return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
 int PubSubManager::unsubscribe(int clientFd, const std::string& channel) {
@@ -52,13 +52,13 @@ int PubSubManager::unsubscribe(int clientFd, const std::string& channel) {
             clientToChannels.erase(it);
         }
     }
-    return clientToChannels[clientFd].size() + clientToPatterns[clientFd].size();
+    return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
 int PubSubManager::psubscribe(int clientFd, const std::string& pattern) {
     patternToSubscribers[pattern].insert(clientFd);
     clientToPatterns[clientFd].insert(pattern);
-    return clientToChannels[clientFd].size() + clientToPatterns[clientFd].size();
+    return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
 int PubSubManager::punsubscribe(int clientFd, const std::string& pattern) {
@@ -75,7 +75,7 @@ int PubSubManager::punsubscribe(int clientFd, const std::string& pattern) {
             clientToPatterns.erase(it);
         }
     }
-    return clientToChannels[clientFd].size() + clientToPatterns[clientFd].size();
+    return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
 int PubSubManager::unsubscribeAll(int clientFd, std::vector<std::string>* outChannels) {
@@ -140,7 +140,7 @@ int PubSubManager::publish(const std::string& channel, const std::string& messag
         }
     }
 
-    return recipients.size();
+    return static_cast<int>(recipients.size());
 }
 
 std::vector<std::string> PubSubManager::getActiveChannels(const std::string& pattern) const {
@@ -158,7 +158,7 @@ std::vector<std::string> PubSubManager::getActiveChannels(const std::string& pat
 int PubSubManager::getNumSub(const std::string& channel) const {
     auto it = channelToSubscribers.find(channel);
     if (it != channelToSubscribers.end()) {
-        return it->second.size();
+        return static_cast<int>(it->second.size());
     }
     return 0;
 }
@@ -166,7 +166,7 @@ int PubSubManager::getNumSub(const std::string& channel) const {
 int PubSubManager::getNumPat() const {
     int total = 0;
     for (const auto& pair : patternToSubscribers) {
-        total += pair.second.size();
+        total += static_cast<int>(pair.second.size());
     }
     return total;
 }

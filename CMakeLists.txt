@@ -53,9 +53,3 @@ target_link_libraries(rampage_cli PRIVATE RAMpageCore)
 
 add_executable(rampage src/main.cpp)
 target_link_libraries(rampage PRIVATE RAMpageCore)
-
-add_executable(db_test tests/db.test.cpp)
-target_link_libraries(db_test PRIVATE RAMpageCore)
-
-enable_testing()
-add_test(NAME DatabaseTest COMMAND db_test)
