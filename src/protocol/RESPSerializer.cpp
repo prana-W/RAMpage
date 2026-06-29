@@ -80,6 +80,22 @@ static bool isInteger(const std::string& s) {
     return true;
 }
 
+std::string RESPSerializer::pushMessage(const std::string& type, const std::string& channel, const std::string& payload) {
+    std::string out = "*3\r\n";
+    out += bulkString(type);
+    out += bulkString(channel);
+    out += bulkString(payload);
+    return out;
+}
+
+std::string RESPSerializer::subscribeAck(const std::string& type, const std::string& channel, int count) {
+    std::string out = "*3\r\n";
+    out += bulkString(type);
+    out += bulkString(channel);
+    out += integer(count);
+    return out;
+}
+
 std::string RESPSerializer::serialize(const std::string& result, const std::string& cmdName) {
     // --- Error response ---
     if (result.size() >= 4 && result.compare(0, 4, "ERR:") == 0) {

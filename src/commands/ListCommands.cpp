@@ -8,7 +8,7 @@
 //   "ERR:<message>"   — failure. message describes what went wrong.
 
 void registerListCommands(CommandRegistry& reg) {
-    reg.registerCommand("LPUSH", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("LPUSH", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 2)
             return "ERR:wrong number of arguments for 'lpush'";
         long long ttlMs = -1;
@@ -26,7 +26,7 @@ void registerListCommands(CommandRegistry& reg) {
         return "ERR:" + res.message;
     });
 
-    reg.registerCommand("RPUSH", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("RPUSH", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 2)
             return "ERR:wrong number of arguments for 'rpush'";
         long long ttlMs = -1;
@@ -44,7 +44,7 @@ void registerListCommands(CommandRegistry& reg) {
         return "ERR:" + res.message;
     });
 
-    reg.registerCommand("LPOP", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("LPOP", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'lpop'";
         Response res = db.lpop(args[0]);
@@ -57,7 +57,7 @@ void registerListCommands(CommandRegistry& reg) {
         return "ERR:" + res.message;
     });
 
-    reg.registerCommand("RPOP", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("RPOP", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'rpop'";
         Response res = db.rpop(args[0]);
@@ -70,7 +70,7 @@ void registerListCommands(CommandRegistry& reg) {
         return "ERR:" + res.message;
     });
 
-    reg.registerCommand("LLEN", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("LLEN", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'llen'";
         Response res = db.llen(args[0]);
@@ -80,7 +80,7 @@ void registerListCommands(CommandRegistry& reg) {
         return "ERR:" + res.message;
     });
 
-    reg.registerCommand("LINDEX", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("LINDEX", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 2)
             return "ERR:wrong number of arguments for 'lindex'";
         long long index = 0;
@@ -99,7 +99,7 @@ void registerListCommands(CommandRegistry& reg) {
         return "ERR:" + res.message;
     });
 
-    reg.registerCommand("LSET", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("LSET", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 3)
             return "ERR:wrong number of arguments for 'lset'";
         long long index = 0;
@@ -114,7 +114,7 @@ void registerListCommands(CommandRegistry& reg) {
         return "ERR:" + res.message;
     });
 
-    reg.registerCommand("LRANGE", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("LRANGE", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 3)
             return "ERR:wrong number of arguments for 'lrange'";
         long long start = 0, stop = 0;

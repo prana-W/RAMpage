@@ -4,7 +4,7 @@
 
 void registerStringCommands(CommandRegistry& reg) {
     // PING — baseline health check used by redis-cli and redis-benchmark
-    reg.registerCommand("PING", [](Database&, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("PING", [](Database&, int clientFd, std::vector<std::string>& args) -> std::string {
         // PING [message] — echoes the message, or "PONG" if no argument
         if (args.empty())
             return "RESP:+PONG\r\n";
@@ -12,7 +12,7 @@ void registerStringCommands(CommandRegistry& reg) {
     });
 
     // SET key value [ttlSeconds]
-    reg.registerCommand("SET", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("SET", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 2)
             return "ERR:wrong number of arguments for 'set'";
         long long ttlMs = -1;
@@ -30,7 +30,7 @@ void registerStringCommands(CommandRegistry& reg) {
     });
 
     // GET key → bulk string or nil ($-1)
-    reg.registerCommand("GET", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("GET", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'get'";
         Response res = db.get(args[0]);
@@ -45,7 +45,7 @@ void registerStringCommands(CommandRegistry& reg) {
     });
 
     // DEL key → integer: 1 (deleted) or 0 (not found)
-    reg.registerCommand("DEL", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("DEL", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'del'";
         Response res = db.del(args[0]);
@@ -57,7 +57,7 @@ void registerStringCommands(CommandRegistry& reg) {
     });
 
     // TTL key → integer seconds (-1 no expiry, -2 not found)
-    reg.registerCommand("TTL", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("TTL", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'ttl'";
         Response res = db.ttl(args[0]);
@@ -67,7 +67,7 @@ void registerStringCommands(CommandRegistry& reg) {
     });
 
     // EXPIRE key seconds → integer: 1 (set) or 0 (key not found)
-    reg.registerCommand("EXPIRE", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("EXPIRE", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 2)
             return "ERR:wrong number of arguments for 'expire'";
         long long ttlMs = 0;
@@ -85,7 +85,7 @@ void registerStringCommands(CommandRegistry& reg) {
     });
 
     // APPEND key value → integer (new string length)
-    reg.registerCommand("APPEND", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("APPEND", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 2)
             return "ERR:wrong number of arguments for 'append'";
         Response res = db.append(args[0], args[1]);
@@ -95,7 +95,7 @@ void registerStringCommands(CommandRegistry& reg) {
     });
 
     // STRLEN key → integer (0 if not found)
-    reg.registerCommand("STRLEN", [](Database& db, std::vector<std::string>& args) -> std::string {
+    reg.registerCommand("STRLEN", [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
         if (args.size() < 1)
             return "ERR:wrong number of arguments for 'strlen'";
         Response res = db.strlen(args[0]);
@@ -106,7 +106,7 @@ void registerStringCommands(CommandRegistry& reg) {
 
     // EXPIRYAT key epochMs — internal AOF command (absolute epoch milliseconds)
     reg.registerCommand("EXPIRYAT",
-                        [](Database& db, std::vector<std::string>& args) -> std::string {
+                        [](Database& db, int clientFd, std::vector<std::string>& args) -> std::string {
                             if (args.size() < 2)
                                 return "ERR:wrong number of arguments for 'expiryat'";
                             long long epochMs = 0;

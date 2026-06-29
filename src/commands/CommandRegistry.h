@@ -9,7 +9,7 @@
 // Forward declaration — breaks circular include with PersistenceManager
 class PersistenceManager;
 
-using CommandHandler = std::function<std::string(Database&, std::vector<std::string>&)>;
+using CommandHandler = std::function<std::string(Database&, int clientFd, std::vector<std::string>&)>;
 
 class CommandRegistry {
    private:
@@ -25,7 +25,7 @@ class CommandRegistry {
 
     // Called by the RESP server path — tokens are already parsed.
     // tokens[0] = command name (any case), tokens[1..] = arguments.
-    std::string execute(Database& db, std::vector<std::string>& tokens);
+    std::string execute(Database& db, int clientFd, std::vector<std::string>& tokens);
 
     // Called by AOF replay — raw text line is tokenized internally.
     std::string execute(Database& db, const std::string& rawLine);

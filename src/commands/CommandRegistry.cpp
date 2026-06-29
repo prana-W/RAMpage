@@ -103,7 +103,7 @@ void CommandRegistry::logIfWriteCommand(const std::string& cmdName,
 }
 
 // --- Token-based execute (called from the RESP server path) ---
-std::string CommandRegistry::execute(Database& db, std::vector<std::string>& tokens) {
+std::string CommandRegistry::execute(Database& db, int clientFd, std::vector<std::string>& tokens) {
     if (tokens.empty())
         return "ERR:empty command";
 
@@ -115,7 +115,7 @@ std::string CommandRegistry::execute(Database& db, std::vector<std::string>& tok
         return "ERR:unknown command '" + tokens[0] + "'";
 
     std::vector<std::string> args(tokens.begin() + 1, tokens.end());
-    std::string result = it->second(db, args);
+    std::string result = it->second(db, clientFd, args);
 
     if (pm_ && result.size() >= 5 && result.substr(0, 5) == "SUCC:") {
         bool shouldLog = (cmdName != "DEL") || (result == "SUCC:1");
@@ -128,5 +128,5 @@ std::string CommandRegistry::execute(Database& db, std::vector<std::string>& tok
 
 std::string CommandRegistry::execute(Database& db, const std::string& rawLine) {
     std::vector<std::string> tokens = tokenize(rawLine);
-    return execute(db, tokens);  // delegate to token-based overload
+    return execute(db, -1, tokens);  // delegate to token-based overload, clientFd=-1 for replay
 }
