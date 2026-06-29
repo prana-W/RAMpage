@@ -9,7 +9,8 @@
 // Forward declaration — breaks circular include with PersistenceManager
 class PersistenceManager;
 
-using CommandHandler = std::function<std::string(Database&, int clientFd, std::vector<std::string>&)>;
+using CommandHandler =
+    std::function<std::string(Database&, int clientFd, std::vector<std::string>&)>;
 
 class CommandRegistry {
    private:

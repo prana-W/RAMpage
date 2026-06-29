@@ -80,7 +80,8 @@ static bool isInteger(const std::string& s) {
     return true;
 }
 
-std::string RESPSerializer::pushMessage(const std::string& type, const std::string& channel, const std::string& payload) {
+std::string RESPSerializer::pushMessage(const std::string& type, const std::string& channel,
+                                        const std::string& payload) {
     std::string out = "*3\r\n";
     out += bulkString(type);
     out += bulkString(channel);
@@ -88,7 +89,8 @@ std::string RESPSerializer::pushMessage(const std::string& type, const std::stri
     return out;
 }
 
-std::string RESPSerializer::subscribeAck(const std::string& type, const std::string& channel, int count) {
+std::string RESPSerializer::subscribeAck(const std::string& type, const std::string& channel,
+                                         int count) {
     std::string out = "*3\r\n";
     out += bulkString(type);
     out += bulkString(channel);
