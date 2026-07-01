@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../database/Database.h"
+#include "CommandContext.h"
 #include "CommandResult.h"
 
 using namespace std;
@@ -12,7 +13,7 @@ using namespace std;
 // Forward declaration — breaks circular include with PersistenceManager
 class PersistenceManager;
 
-using CommandHandler = function<CommandResult(Database&, int clientFd, vector<string>&)>;
+using CommandHandler = function<CommandResult(const CommandContext&)>;
 
 class CommandRegistry {
    private:
@@ -28,10 +29,11 @@ class CommandRegistry {
 
     // Called by the RESP server path — tokens are already parsed.
     // tokens[0] = command name (any case), tokens[1..] = arguments.
-    CommandResult execute(Database& db, int clientFd, vector<string>& tokens);
+    CommandResult execute(Database& db, int clientFd, const vector<string>& tokens,
+                          PubSubManager* pubSub = nullptr);
 
     // Called by AOF replay — raw text line is tokenized internally.
-    CommandResult execute(Database& db, const string& rawLine);
+    CommandResult execute(Database& db, const string& rawLine, PubSubManager* pubSub = nullptr);
 
     // Wire up persistence. Call this AFTER replay() so replayed commands
     // are not re-written to the log.

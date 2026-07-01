@@ -102,7 +102,8 @@ void CommandRegistry::logIfWriteCommand(const string& cmdName, const vector<stri
 }
 
 // --- Token-based execute (called from the RESP server path) ---
-CommandResult CommandRegistry::execute(Database& db, int clientFd, vector<string>& tokens) {
+CommandResult CommandRegistry::execute(Database& db, int clientFd, const vector<string>& tokens,
+                                       PubSubManager* pubSub) {
     if (tokens.empty())
         return {CommandResult::Type::ERROR, "empty command"};
 
@@ -114,7 +115,8 @@ CommandResult CommandRegistry::execute(Database& db, int clientFd, vector<string
         return {CommandResult::Type::ERROR, "unknown command '" + tokens[0] + "'"};
 
     vector<string> args(tokens.begin() + 1, tokens.end());
-    CommandResult result = it->second(db, clientFd, args);
+    CommandContext ctx{db, clientFd, args, pubSub};
+    CommandResult result = it->second(ctx);
 
     if (pm_ && result.type == CommandResult::Type::SUCCESS) {
         bool shouldLog = (cmdName != "DEL") || (result.message == "1");
@@ -125,7 +127,8 @@ CommandResult CommandRegistry::execute(Database& db, int clientFd, vector<string
     return result;
 }
 
-CommandResult CommandRegistry::execute(Database& db, const string& rawLine) {
+CommandResult CommandRegistry::execute(Database& db, const string& rawLine, PubSubManager* pubSub) {
     vector<string> tokens = tokenize(rawLine);
-    return execute(db, -1, tokens);  // delegate to token-based overload, clientFd=-1 for replay
+    return execute(db, -1, tokens,
+                   pubSub);  // delegate to token-based overload, clientFd=-1 for replay
 }

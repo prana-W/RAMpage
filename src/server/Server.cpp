@@ -133,7 +133,7 @@ void Server::processClientBuffer(int clientFd, string& buffer, Database& db,
         }
 
         // Dispatch through the command registry
-        CommandResult result = registry.execute(db, clientFd, cmd.args);
+        CommandResult result = registry.execute(db, clientFd, cmd.args, &pubSub_);
 
         outBuf += RESPSerializer::serialize(result, cmdName);
     }

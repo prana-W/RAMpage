@@ -40,6 +40,7 @@ add_library(RAMpageCore
     src/protocol/RESPSerializer.cpp
     src/pubsub/PubSubManager.cpp
     src/utils/Logger.cpp
+    src/utils/StringUtils.cpp
 )
 
 find_package(Threads REQUIRED)
