@@ -1,4 +1,3 @@
-#include <iostream>
 #include <string>
 
 #include <memory>
@@ -10,32 +9,36 @@
 #include "./persistence/PersistenceManager.h"
 #include "./pubsub/PubSubManager.h"
 #include "./server/Server.h"
+#include "./server/ServerConfig.h"
+#include "./utils/Logger.h"
 
 using namespace std;
 
-int main(int argc, char* argv[]) {
-    int port = 2006;
-    string aofPath = "rampage.rampage";
-    bool persistEnabled = false;
-
+ServerConfig parseArgs(int argc, char* argv[]) {
+    ServerConfig config;
     for (int i = 1; i < argc; ++i) {
         string arg = argv[i];
         if (arg == "--port" && i + 1 < argc) {
             try {
-                port = stoi(argv[i + 1]);
+                config.port = stoi(argv[i + 1]);
                 i++;
             } catch (...) {
-                cerr << "[server] Invalid port number '" << argv[i + 1]
-                     << "'. Using default: 2006\n";
-                port = 2006;
+                Logger::error("server", "Invalid port number '" + string(argv[i + 1]) +
+                                            "'. Using default: 2006");
+                config.port = 2006;
             }
         } else if (arg == "--aof-file" && i + 1 < argc) {
-            aofPath = argv[i + 1];
+            config.aofPath = argv[i + 1];
             i++;
         } else if (arg == "--persist") {
-            persistEnabled = true;
+            config.persistEnabled = true;
         }
     }
+    return config;
+}
+
+int main(int argc, char* argv[]) {
+    ServerConfig config = parseArgs(argc, argv);
 
     Database db;
     CommandRegistry registry;
@@ -47,16 +50,16 @@ int main(int argc, char* argv[]) {
     registerPubSubCommands(registry, pubSub);
 
     unique_ptr<PersistenceManager> pm;
-    if (persistEnabled) {
-        pm = make_unique<PersistenceManager>(aofPath);
+    if (config.persistEnabled) {
+        pm = make_unique<PersistenceManager>(config.aofPath);
         pm->replay(db, registry);
         registry.setPersistenceManager(pm.get());
     } else {
-        cout << "[persistence] Persistence disabled (run with --persist to enable)\n";
+        Logger::info("persistence", "Persistence disabled (run with --persist to enable)");
     }
 
-    cout << "[server] RAMpage starting on port " << port << " ...\n";
-    Server server(port, pubSub);
+    Logger::info("server", "RAMpage starting on port " + to_string(config.port) + " ...");
+    Server server(config, pubSub);
     server.start(db, registry);
 
     return 0;

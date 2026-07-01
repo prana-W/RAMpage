@@ -97,21 +97,19 @@ string RESPSerializer::subscribeAck(const string& type, const string& channel, i
     return out;
 }
 
-string RESPSerializer::serialize(const string& result, const string& cmdName) {
-    // --- Error response ---
-    if (result.size() >= 4 && result.compare(0, 4, "ERR:") == 0) {
-        string msg = result.substr(4);
+string RESPSerializer::serialize(const CommandResult& result, const string& cmdName) {
+    if (result.type == CommandResult::Type::RESP) {
+        return result.message;
+    }
+
+    if (result.type == CommandResult::Type::ERROR) {
+        string msg = result.message;
         if (msg.compare(0, 10, "Wrong type") == 0)
             return "-WRONGTYPE " + msg + "\r\n";
         return errorMsg(msg);
     }
 
-    // --- Success response (must start with "SUCC:") ---
-    if (result.size() < 5 || result.compare(0, 5, "SUCC:") != 0) {
-        return errorMsg("internal error: " + result);
-    }
-
-    const string payload = result.substr(5);
+    const string& payload = result.message;
 
     // --- Integer commands ---
     if (INTEGER_CMDS.count(cmdName)) {

@@ -5,9 +5,10 @@
 #include "../commands/CommandRegistry.h"
 #include "../database/Database.h"
 #include "../pubsub/PubSubManager.h"
+#include "ServerConfig.h"
 
 class Server {
-    int port;
+    ServerConfig config;
     int serverFd;  // the listening socket file descriptor
     int epollFd;   // the epoll instance file descriptor
     PubSubManager& pubSub_;
@@ -26,7 +27,7 @@ class Server {
                              CommandRegistry& registry);
 
    public:
-    Server(int port, PubSubManager& pubSub);
+    Server(const ServerConfig& config, PubSubManager& pubSub);
     ~Server();
 
     // Starts the single-threaded epoll event loop. Blocks until the process is killed.

@@ -6,10 +6,11 @@
 
 #include "../commands/CommandRegistry.h"
 #include "../database/Database.h"
+#include "../utils/Logger.h"
 
 PersistenceManager::PersistenceManager(const string& filePath)
     : filePath_(filePath), flusherThread_(&PersistenceManager::flusherLoop, this) {
-    cout << "[persistence] AOF log path: " << filePath_ << "\n";
+    Logger::info("persistence", "AOF log path: " + filePath_);
 }
 
 PersistenceManager::~PersistenceManager() {
@@ -31,11 +32,11 @@ void PersistenceManager::logCommand(const string& entry) {
 void PersistenceManager::replay(Database& db, CommandRegistry& registry) {
     ifstream file(filePath_);
     if (!file.is_open()) {
-        cout << "[persistence] No AOF file found — starting with empty database.\n";
+        Logger::info("persistence", "No AOF file found — starting with empty database.");
         return;
     }
 
-    cout << "[persistence] Replaying AOF log: " << filePath_ << " ...\n";
+    Logger::info("persistence", "Replaying AOF log: " + filePath_ + " ...");
 
     string line;
     int replayed = 0;
@@ -47,18 +48,18 @@ void PersistenceManager::replay(Database& db, CommandRegistry& registry) {
 
         // Execute command directly; pm_ is nullptr in registry at this point
         // so no re-logging happens
-        string result = registry.execute(db, line);
-        if (result.substr(0, 4) == "ERR:") {
-            cerr << "[persistence] Replay warning — command failed: '" << line << "' → " << result
-                 << "\n";
+        CommandResult result = registry.execute(db, line);
+        if (result.type == CommandResult::Type::ERROR) {
+            Logger::warn("persistence",
+                         "Replay warning — command failed: '" + line + "' → " + result.message);
             ++skipped;
         } else {
             ++replayed;
         }
     }
 
-    cout << "[persistence] Replay complete: " << replayed << " commands applied, " << skipped
-         << " skipped.\n";
+    Logger::info("persistence", "Replay complete: " + to_string(replayed) + " commands applied, " +
+                                    to_string(skipped) + " skipped.");
 }
 
 void PersistenceManager::flusherLoop() {
@@ -67,8 +68,8 @@ void PersistenceManager::flusherLoop() {
         error_code ec;
         filesystem::create_directories(parentPath, ec);
         if (ec) {
-            cerr << "[persistence] FATAL: cannot create directory '" << parentPath
-                 << "': " << ec.message() << "\n";
+            Logger::error("persistence", "FATAL: cannot create directory '" + parentPath.string() +
+                                             "': " + ec.message());
             return;
         }
     }
@@ -76,7 +77,7 @@ void PersistenceManager::flusherLoop() {
     // Open in append mode — creates the file if it does not exist
     ofstream file(filePath_, ios::app);
     if (!file.is_open()) {
-        cerr << "[persistence] FATAL: cannot open AOF file for writing: " << filePath_ << "\n";
+        Logger::error("persistence", "FATAL: cannot open AOF file for writing: " + filePath_);
         return;
     }
 

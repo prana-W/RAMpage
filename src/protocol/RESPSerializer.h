@@ -2,12 +2,13 @@
 
 #include <string>
 #include <vector>
+#include "../commands/CommandResult.h"
 
 using namespace std;
 
 class RESPSerializer {
    public:
-    static string serialize(const string& internalResult, const string& cmdName);
+    static string serialize(const CommandResult& internalResult, const string& cmdName);
 
     static string simpleString(const string& s);       // +s\r\n
     static string errorMsg(const string& msg);         // -ERR msg\r\n

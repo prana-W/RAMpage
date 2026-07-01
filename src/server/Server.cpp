@@ -1,6 +1,6 @@
 #include "Server.h"
+#include "../utils/Logger.h"
 
-#include <iostream>
 #include <string>
 #include <unordered_map>
 
@@ -22,7 +22,8 @@ using namespace std;
 
 static const int MAX_EVENTS = 64;
 
-Server::Server(int p, PubSubManager& pubSub) : port(p), serverFd(-1), epollFd(-1), pubSub_(pubSub) {
+Server::Server(const ServerConfig& cfg, PubSubManager& pubSub)
+    : config(cfg), serverFd(-1), epollFd(-1), pubSub_(pubSub) {
 }
 
 Server::~Server() {
@@ -37,7 +38,7 @@ Server::~Server() {
 bool Server::setupSocket() {
     serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverFd < 0) {
-        cerr << "[server] Failed to create socket\n";
+        Logger::error("server", "Failed to create socket");
         return false;
     }
 
@@ -52,15 +53,15 @@ bool Server::setupSocket() {
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(static_cast<uint16_t>(port));
+    addr.sin_port = htons(static_cast<uint16_t>(config.port));
 
     if (bind(serverFd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        cerr << "[server] Failed to bind to port " << port << "\n";
+        Logger::error("server", "Failed to bind to port " + to_string(config.port));
         return false;
     }
 
     if (listen(serverFd, 10) < 0) {
-        cerr << "[server] Failed to listen\n";
+        Logger::error("server", "Failed to listen");
         return false;
     }
 
@@ -79,7 +80,7 @@ void Server::removeClient(int clientFd) {
     pubSub_.punsubscribeAll(clientFd);
     epoll_ctl(epollFd, EPOLL_CTL_DEL, clientFd, nullptr);
     close(clientFd);
-    cout << "[server] Client disconnected (fd=" << clientFd << ")\n";
+    Logger::info("server", "Client disconnected (fd=" + to_string(clientFd) + ")");
 }
 
 void Server::processClientBuffer(int clientFd, string& buffer, Database& db,
@@ -132,14 +133,9 @@ void Server::processClientBuffer(int clientFd, string& buffer, Database& db,
         }
 
         // Dispatch through the command registry
-        string internalResult = registry.execute(db, clientFd, cmd.args);
+        CommandResult result = registry.execute(db, clientFd, cmd.args);
 
-        // "RESP:" prefix = pre-serialized RESP bytes, send as-is (used by LRANGE)
-        if (internalResult.size() >= 5 && internalResult.compare(0, 5, "RESP:") == 0) {
-            outBuf.append(internalResult, 5, string::npos);
-        } else {
-            outBuf += RESPSerializer::serialize(internalResult, cmdName);
-        }
+        outBuf += RESPSerializer::serialize(result, cmdName);
     }
 
     // Flush all accumulated responses in one syscall
@@ -156,17 +152,18 @@ void Server::start(Database& db, CommandRegistry& registry) {
     // Create the epoll instance
     epollFd = epoll_create1(0);
     if (epollFd < 0) {
-        cerr << "[server] Failed to create epoll instance\n";
+        Logger::error("server", "Failed to create epoll instance");
         return;
     }
 
     // Register the listening socket so we know when a new client connects
     if (!addToEpoll(serverFd)) {
-        cerr << "[server] Failed to add server socket to epoll\n";
+        Logger::error("server", "Failed to add server socket to epoll");
         return;
     }
 
-    cout << "[server] RAMpage server listening on port " << port << " (RESP protocol) ...\n";
+    Logger::info("server", "RAMpage server listening on port " + to_string(config.port) +
+                               " (RESP protocol) ...");
 
     // Per-client input buffers: accumulates bytes until a full RESP frame arrives
     unordered_map<int, string> clientBuffers;
@@ -178,7 +175,7 @@ void Server::start(Database& db, CommandRegistry& registry) {
         // Block until at least one fd is ready; -1 means wait forever
         int numReady = epoll_wait(epollFd, events, MAX_EVENTS, -1);
         if (numReady < 0) {
-            cerr << "[server] epoll_wait error\n";
+            Logger::error("server", "epoll_wait error");
             break;
         }
 
@@ -200,8 +197,8 @@ void Server::start(Database& db, CommandRegistry& registry) {
                 addToEpoll(clientFd);
                 clientBuffers[clientFd] = "";  // initialize empty buffer for this client
 
-                cout << "[server] New client connected (fd=" << clientFd << ") from "
-                     << inet_ntoa(clientAddr.sin_addr) << "\n";
+                Logger::info("server", "New client connected (fd=" + to_string(clientFd) +
+                                           ") from " + string(inet_ntoa(clientAddr.sin_addr)));
 
             } else {
                 // --- Existing client sent data ---

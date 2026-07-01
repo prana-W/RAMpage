@@ -102,22 +102,22 @@ void CommandRegistry::logIfWriteCommand(const string& cmdName, const vector<stri
 }
 
 // --- Token-based execute (called from the RESP server path) ---
-string CommandRegistry::execute(Database& db, int clientFd, vector<string>& tokens) {
+CommandResult CommandRegistry::execute(Database& db, int clientFd, vector<string>& tokens) {
     if (tokens.empty())
-        return "ERR:empty command";
+        return {CommandResult::Type::ERROR, "empty command"};
 
     string cmdName = tokens[0];
     transform(cmdName.begin(), cmdName.end(), cmdName.begin(), ::toupper);
 
     auto it = handlers.find(cmdName);
     if (it == handlers.end())
-        return "ERR:unknown command '" + tokens[0] + "'";
+        return {CommandResult::Type::ERROR, "unknown command '" + tokens[0] + "'"};
 
     vector<string> args(tokens.begin() + 1, tokens.end());
-    string result = it->second(db, clientFd, args);
+    CommandResult result = it->second(db, clientFd, args);
 
-    if (pm_ && result.size() >= 5 && result.substr(0, 5) == "SUCC:") {
-        bool shouldLog = (cmdName != "DEL") || (result == "SUCC:1");
+    if (pm_ && result.type == CommandResult::Type::SUCCESS) {
+        bool shouldLog = (cmdName != "DEL") || (result.message == "1");
         if (shouldLog)
             logIfWriteCommand(cmdName, tokens);
     }
@@ -125,7 +125,7 @@ string CommandRegistry::execute(Database& db, int clientFd, vector<string>& toke
     return result;
 }
 
-string CommandRegistry::execute(Database& db, const string& rawLine) {
+CommandResult CommandRegistry::execute(Database& db, const string& rawLine) {
     vector<string> tokens = tokenize(rawLine);
     return execute(db, -1, tokens);  // delegate to token-based overload, clientFd=-1 for replay
 }
