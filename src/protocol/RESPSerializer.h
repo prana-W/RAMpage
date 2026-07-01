@@ -3,19 +3,20 @@
 #include <string>
 #include <vector>
 
+using namespace std;
+
 class RESPSerializer {
    public:
-    static std::string serialize(const std::string& internalResult, const std::string& cmdName);
+    static string serialize(const string& internalResult, const string& cmdName);
 
-    static std::string simpleString(const std::string& s);            // +s\r\n
-    static std::string errorMsg(const std::string& msg);              // -ERR msg\r\n
-    static std::string integer(long long n);                          // :n\r\n
-    static std::string bulkString(const std::string& s);              // $len\r\ndata\r\n
-    static std::string nullBulkString();                              // $-1\r\n
-    static std::string array(const std::vector<std::string>& items);  // *N\r\n...
+    static string simpleString(const string& s);       // +s\r\n
+    static string errorMsg(const string& msg);         // -ERR msg\r\n
+    static string integer(long long n);                // :n\r\n
+    static string bulkString(const string& s);         // $len\r\ndata\r\n
+    static string nullBulkString();                    // $-1\r\n
+    static string array(const vector<string>& items);  // *N\r\n...
 
     // Pub/Sub push messages and acks
-    static std::string pushMessage(const std::string& type, const std::string& channel,
-                                   const std::string& payload);
-    static std::string subscribeAck(const std::string& type, const std::string& channel, int count);
+    static string pushMessage(const string& type, const string& channel, const string& payload);
+    static string subscribeAck(const string& type, const string& channel, int count);
 };

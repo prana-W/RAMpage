@@ -4,10 +4,12 @@
 
 #include "../protocol/RESPSerializer.h"
 
+using namespace std;
+
 // Basic glob matcher for '*' and '?'
-bool PubSubManager::matchPattern(const std::string& pattern, const std::string& channel) {
+bool PubSubManager::matchPattern(const string& pattern, const string& channel) {
     size_t p = 0, c = 0;
-    size_t star_idx = std::string::npos;
+    size_t star_idx = string::npos;
     size_t match_idx = 0;
 
     while (c < channel.length()) {
@@ -18,7 +20,7 @@ bool PubSubManager::matchPattern(const std::string& pattern, const std::string& 
             star_idx = p;
             match_idx = c;
             p++;
-        } else if (star_idx != std::string::npos) {
+        } else if (star_idx != string::npos) {
             p = star_idx + 1;
             match_idx++;
             c = match_idx;
@@ -32,13 +34,13 @@ bool PubSubManager::matchPattern(const std::string& pattern, const std::string& 
     return p == pattern.length();
 }
 
-int PubSubManager::subscribe(int clientFd, const std::string& channel) {
+int PubSubManager::subscribe(int clientFd, const string& channel) {
     channelToSubscribers[channel].insert(clientFd);
     clientToChannels[clientFd].insert(channel);
     return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
-int PubSubManager::unsubscribe(int clientFd, const std::string& channel) {
+int PubSubManager::unsubscribe(int clientFd, const string& channel) {
     auto& subs = channelToSubscribers[channel];
     subs.erase(clientFd);
     if (subs.empty()) {
@@ -55,13 +57,13 @@ int PubSubManager::unsubscribe(int clientFd, const std::string& channel) {
     return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
-int PubSubManager::psubscribe(int clientFd, const std::string& pattern) {
+int PubSubManager::psubscribe(int clientFd, const string& pattern) {
     patternToSubscribers[pattern].insert(clientFd);
     clientToPatterns[clientFd].insert(pattern);
     return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
-int PubSubManager::punsubscribe(int clientFd, const std::string& pattern) {
+int PubSubManager::punsubscribe(int clientFd, const string& pattern) {
     auto& subs = patternToSubscribers[pattern];
     subs.erase(clientFd);
     if (subs.empty()) {
@@ -78,13 +80,13 @@ int PubSubManager::punsubscribe(int clientFd, const std::string& pattern) {
     return static_cast<int>(clientToChannels[clientFd].size() + clientToPatterns[clientFd].size());
 }
 
-int PubSubManager::unsubscribeAll(int clientFd, std::vector<std::string>* outChannels) {
+int PubSubManager::unsubscribeAll(int clientFd, vector<string>* outChannels) {
     auto it = clientToChannels.find(clientFd);
     if (it == clientToChannels.end())
         return 0;
 
     int count = 0;
-    std::unordered_set<std::string> channels = it->second;  // copy
+    unordered_set<string> channels = it->second;  // copy
     for (const auto& ch : channels) {
         if (outChannels)
             outChannels->push_back(ch);
@@ -94,13 +96,13 @@ int PubSubManager::unsubscribeAll(int clientFd, std::vector<std::string>* outCha
     return count;
 }
 
-int PubSubManager::punsubscribeAll(int clientFd, std::vector<std::string>* outPatterns) {
+int PubSubManager::punsubscribeAll(int clientFd, vector<string>* outPatterns) {
     auto it = clientToPatterns.find(clientFd);
     if (it == clientToPatterns.end())
         return 0;
 
     int count = 0;
-    std::unordered_set<std::string> patterns = it->second;  // copy
+    unordered_set<string> patterns = it->second;  // copy
     for (const auto& pat : patterns) {
         if (outPatterns)
             outPatterns->push_back(pat);
@@ -110,15 +112,15 @@ int PubSubManager::punsubscribeAll(int clientFd, std::vector<std::string>* outPa
     return count;
 }
 
-int PubSubManager::publish(const std::string& channel, const std::string& message) {
-    std::unordered_set<int> recipients;
+int PubSubManager::publish(const string& channel, const string& message) {
+    unordered_set<int> recipients;
 
     // Exact matches
     auto it = channelToSubscribers.find(channel);
     if (it != channelToSubscribers.end()) {
         for (int fd : it->second) {
             recipients.insert(fd);
-            std::string msg = RESPSerializer::pushMessage("message", channel, message);
+            string msg = RESPSerializer::pushMessage("message", channel, message);
             send(fd, msg.c_str(), msg.size(), 0);
         }
     }
@@ -131,9 +133,9 @@ int PubSubManager::publish(const std::string& channel, const std::string& messag
                 // Redis handles this by sending the message twice, once as 'message', once as
                 // 'pmessage'. If we want to emulate Redis perfectly, we don't deduplicate in that
                 // sense. We'll send a 'pmessage'.
-                std::string pmsg =
-                    "*4\r\n$8\r\npmessage\r\n" + RESPSerializer::bulkString(pair.first) +
-                    RESPSerializer::bulkString(channel) + RESPSerializer::bulkString(message);
+                string pmsg = "*4\r\n$8\r\npmessage\r\n" + RESPSerializer::bulkString(pair.first) +
+                              RESPSerializer::bulkString(channel) +
+                              RESPSerializer::bulkString(message);
                 send(fd, pmsg.c_str(), pmsg.size(), 0);
                 recipients.insert(fd);  // For return count (unique recipients)
             }
@@ -143,8 +145,8 @@ int PubSubManager::publish(const std::string& channel, const std::string& messag
     return static_cast<int>(recipients.size());
 }
 
-std::vector<std::string> PubSubManager::getActiveChannels(const std::string& pattern) const {
-    std::vector<std::string> result;
+vector<string> PubSubManager::getActiveChannels(const string& pattern) const {
+    vector<string> result;
     for (const auto& pair : channelToSubscribers) {
         if (!pair.second.empty()) {
             if (pattern.empty() || matchPattern(pattern, pair.first)) {
@@ -155,7 +157,7 @@ std::vector<std::string> PubSubManager::getActiveChannels(const std::string& pat
     return result;
 }
 
-int PubSubManager::getNumSub(const std::string& channel) const {
+int PubSubManager::getNumSub(const string& channel) const {
     auto it = channelToSubscribers.find(channel);
     if (it != channelToSubscribers.end()) {
         return static_cast<int>(it->second.size());

@@ -7,11 +7,12 @@
 
 #include "Status.h"
 
-using DataType = std::variant<std::monostate, std::string, std::vector<std::string>, long long,
-                              std::vector<std::string_view>>;
+using namespace std;
+
+using DataType = variant<monostate, string, vector<string>, long long, vector<string_view>>;
 
 struct Response {
     Status status;
-    std::string message;
+    string message;
     DataType data;
 };

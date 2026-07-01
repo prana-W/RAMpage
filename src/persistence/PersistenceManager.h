@@ -7,24 +7,26 @@
 #include <string>
 #include <thread>
 
+using namespace std;
+
 class Database;
 class CommandRegistry;
 
 class PersistenceManager {
    public:
-    explicit PersistenceManager(const std::string& filePath);
+    explicit PersistenceManager(const string& filePath);
     ~PersistenceManager();
 
-    void logCommand(const std::string& entry);
+    void logCommand(const string& entry);
     void replay(Database& db, CommandRegistry& registry);
 
    private:
-    std::string filePath_;
-    std::queue<std::string> queue_;
-    std::mutex mutex_;
-    std::condition_variable cv_;
-    std::atomic<bool> shutdown_{false};
-    std::thread flusherThread_;
+    string filePath_;
+    queue<string> queue_;
+    mutex mutex_;
+    condition_variable cv_;
+    atomic<bool> shutdown_{false};
+    thread flusherThread_;
 
     // Entry point for the background flusher thread
     void flusherLoop();

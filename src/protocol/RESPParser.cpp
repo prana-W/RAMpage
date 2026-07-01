@@ -1,14 +1,14 @@
 #include "RESPParser.h"
 
-static ParseResult parseArray(std::string& buf, ParsedCommand& out) {
+static ParseResult parseArray(string& buf, ParsedCommand& out) {
     // Find the end of the count line: *<N>\r\n
     size_t firstCRLF = buf.find("\r\n");
-    if (firstCRLF == std::string::npos)
+    if (firstCRLF == string::npos)
         return ParseResult::INCOMPLETE;
 
     int count = 0;
     try {
-        count = std::stoi(buf.substr(1, firstCRLF - 1));
+        count = stoi(buf.substr(1, firstCRLF - 1));
     } catch (...) {
         return ParseResult::ERROR;
     }
@@ -17,7 +17,7 @@ static ParseResult parseArray(std::string& buf, ParsedCommand& out) {
         return ParseResult::ERROR;
 
     size_t cursor = firstCRLF + 2;  // points past the first \r\n
-    std::vector<std::string> args;
+    vector<string> args;
     args.reserve(static_cast<size_t>(count));
 
     for (int i = 0; i < count; ++i) {
@@ -29,12 +29,12 @@ static ParseResult parseArray(std::string& buf, ParsedCommand& out) {
             return ParseResult::ERROR;
 
         size_t lenEnd = buf.find("\r\n", cursor + 1);
-        if (lenEnd == std::string::npos)
+        if (lenEnd == string::npos)
             return ParseResult::INCOMPLETE;
 
         int len = 0;
         try {
-            len = std::stoi(buf.substr(cursor + 1, lenEnd - cursor - 1));
+            len = stoi(buf.substr(cursor + 1, lenEnd - cursor - 1));
         } catch (...) {
             return ParseResult::ERROR;
         }
@@ -66,12 +66,12 @@ static ParseResult parseArray(std::string& buf, ParsedCommand& out) {
     return ParseResult::OK;
 }
 
-static ParseResult parseInline(std::string& buf, ParsedCommand& out) {
+static ParseResult parseInline(string& buf, ParsedCommand& out) {
     size_t nlPos = buf.find('\n');
-    if (nlPos == std::string::npos)
+    if (nlPos == string::npos)
         return ParseResult::INCOMPLETE;
 
-    std::string line = buf.substr(0, nlPos);
+    string line = buf.substr(0, nlPos);
     if (!line.empty() && line.back() == '\r')
         line.pop_back();
 
@@ -81,10 +81,10 @@ static ParseResult parseInline(std::string& buf, ParsedCommand& out) {
     if (line.empty())
         return ParseResult::ERROR;  // empty line — caller skips it
 
-    // Manual space-split (avoids std::istringstream allocation overhead)
-    std::vector<std::string> args;
+    // Manual space-split (avoids istringstream allocation overhead)
+    vector<string> args;
     size_t start = 0, end;
-    while ((end = line.find(' ', start)) != std::string::npos) {
+    while ((end = line.find(' ', start)) != string::npos) {
         if (end > start)
             args.push_back(line.substr(start, end - start));
         start = end + 1;
@@ -99,7 +99,7 @@ static ParseResult parseInline(std::string& buf, ParsedCommand& out) {
     return ParseResult::OK;
 }
 
-ParseResult RESPParser::parse(std::string& buf, ParsedCommand& out) {
+ParseResult RESPParser::parse(string& buf, ParsedCommand& out) {
     if (buf.empty())
         return ParseResult::INCOMPLETE;
 

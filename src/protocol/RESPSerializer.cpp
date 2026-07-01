@@ -3,55 +3,55 @@
 #include <sstream>
 #include <unordered_set>
 
-static const std::unordered_set<std::string> INTEGER_CMDS = {
+static const unordered_set<string> INTEGER_CMDS = {
     "APPEND", "STRLEN", "LLEN",     "TTL",      "PTTL", "LPUSH", "RPUSH",  "DEL",
     "EXISTS", "EXPIRE", "EXPIREAT", "EXPIRYAT", "INCR", "DECR",  "INCRBY", "DECRBY",
 };
 
-static const std::unordered_set<std::string> BULK_CMDS = {
+static const unordered_set<string> BULK_CMDS = {
     "GET", "GETSET", "LPOP", "RPOP", "LINDEX",
 };
 
-static const std::unordered_set<std::string> ARRAY_CMDS = {
+static const unordered_set<string> ARRAY_CMDS = {
     "LRANGE",
     "KEYS",
     "SMEMBERS",
     "HGETALL",
 };
 
-std::string RESPSerializer::simpleString(const std::string& s) {
+string RESPSerializer::simpleString(const string& s) {
     return "+" + s + "\r\n";
 }
 
-std::string RESPSerializer::errorMsg(const std::string& msg) {
+string RESPSerializer::errorMsg(const string& msg) {
     return "-ERR " + msg + "\r\n";
 }
 
-std::string RESPSerializer::integer(long long n) {
-    return ":" + std::to_string(n) + "\r\n";
+string RESPSerializer::integer(long long n) {
+    return ":" + to_string(n) + "\r\n";
 }
 
-std::string RESPSerializer::bulkString(const std::string& s) {
-    return "$" + std::to_string(s.size()) + "\r\n" + s + "\r\n";
+string RESPSerializer::bulkString(const string& s) {
+    return "$" + to_string(s.size()) + "\r\n" + s + "\r\n";
 }
 
-std::string RESPSerializer::nullBulkString() {
+string RESPSerializer::nullBulkString() {
     return "$-1\r\n";
 }
 
-std::string RESPSerializer::array(const std::vector<std::string>& items) {
+string RESPSerializer::array(const vector<string>& items) {
     size_t totalSize = 16;
     for (const auto& item : items)
         totalSize += item.size() + 16;
 
-    std::string out;
+    string out;
     out.reserve(totalSize);
     out += '*';
-    out += std::to_string(items.size());
+    out += to_string(items.size());
     out += "\r\n";
     for (const auto& item : items) {
         out += '$';
-        out += std::to_string(item.size());
+        out += to_string(item.size());
         out += "\r\n";
         out += item;
         out += "\r\n";
@@ -59,16 +59,16 @@ std::string RESPSerializer::array(const std::vector<std::string>& items) {
     return out;
 }
 
-static std::vector<std::string> splitPipe(const std::string& s) {
-    std::vector<std::string> result;
-    std::istringstream ss(s);
-    std::string token;
-    while (std::getline(ss, token, '|'))
+static vector<string> splitPipe(const string& s) {
+    vector<string> result;
+    istringstream ss(s);
+    string token;
+    while (getline(ss, token, '|'))
         result.push_back(token);
     return result;
 }
 
-static bool isInteger(const std::string& s) {
+static bool isInteger(const string& s) {
     if (s.empty())
         return false;
     size_t start = (s[0] == '-') ? 1 : 0;
@@ -80,28 +80,27 @@ static bool isInteger(const std::string& s) {
     return true;
 }
 
-std::string RESPSerializer::pushMessage(const std::string& type, const std::string& channel,
-                                        const std::string& payload) {
-    std::string out = "*3\r\n";
+string RESPSerializer::pushMessage(const string& type, const string& channel,
+                                   const string& payload) {
+    string out = "*3\r\n";
     out += bulkString(type);
     out += bulkString(channel);
     out += bulkString(payload);
     return out;
 }
 
-std::string RESPSerializer::subscribeAck(const std::string& type, const std::string& channel,
-                                         int count) {
-    std::string out = "*3\r\n";
+string RESPSerializer::subscribeAck(const string& type, const string& channel, int count) {
+    string out = "*3\r\n";
     out += bulkString(type);
     out += bulkString(channel);
     out += integer(count);
     return out;
 }
 
-std::string RESPSerializer::serialize(const std::string& result, const std::string& cmdName) {
+string RESPSerializer::serialize(const string& result, const string& cmdName) {
     // --- Error response ---
     if (result.size() >= 4 && result.compare(0, 4, "ERR:") == 0) {
-        std::string msg = result.substr(4);
+        string msg = result.substr(4);
         if (msg.compare(0, 10, "Wrong type") == 0)
             return "-WRONGTYPE " + msg + "\r\n";
         return errorMsg(msg);
@@ -112,14 +111,14 @@ std::string RESPSerializer::serialize(const std::string& result, const std::stri
         return errorMsg("internal error: " + result);
     }
 
-    const std::string payload = result.substr(5);
+    const string payload = result.substr(5);
 
     // --- Integer commands ---
     if (INTEGER_CMDS.count(cmdName)) {
         if (!isInteger(payload))
             return errorMsg("internal error: expected integer for " + cmdName);
         try {
-            return integer(std::stoll(payload));
+            return integer(stoll(payload));
         } catch (...) {
             return errorMsg("internal error: integer overflow");
         }

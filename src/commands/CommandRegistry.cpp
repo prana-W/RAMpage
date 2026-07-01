@@ -8,7 +8,7 @@
 
 // handlers is the unordered map used to map the command with the actual function that needs to be
 // run
-void CommandRegistry::registerCommand(const std::string& name, CommandHandler fn) {
+void CommandRegistry::registerCommand(const string& name, CommandHandler fn) {
     handlers[name] = fn;
 }
 
@@ -16,9 +16,9 @@ void CommandRegistry::setPersistenceManager(PersistenceManager* pm) {
     pm_ = pm;
 }
 
-static std::vector<std::string> tokenize(const std::string& line) {
-    std::vector<std::string> tokens;
-    std::string current_token;
+static vector<string> tokenize(const string& line) {
+    vector<string> tokens;
+    string current_token;
     bool in_quotes = false;
 
     for (size_t i = 0; i < line.length(); ++i) {
@@ -26,7 +26,7 @@ static std::vector<std::string> tokenize(const std::string& line) {
 
         if (c == '"') {
             in_quotes = !in_quotes;
-        } else if (std::isspace(c) && !in_quotes) {
+        } else if (isspace(c) && !in_quotes) {
             if (!current_token.empty()) {
                 tokens.push_back(current_token);
                 current_token.clear();
@@ -43,24 +43,23 @@ static std::vector<std::string> tokenize(const std::string& line) {
     return tokens;
 }
 
-static std::string quoteIfNeeded(const std::string& s) {
-    if (s.find(' ') != std::string::npos)
+static string quoteIfNeeded(const string& s) {
+    if (s.find(' ') != string::npos)
         return "\"" + s + "\"";
     return s;
 }
 
 // Returns current time as milliseconds since Unix epoch
 static long long nowMs() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::system_clock::now().time_since_epoch())
+    return chrono::duration_cast<chrono::milliseconds>(
+               chrono::system_clock::now().time_since_epoch())
         .count();
 }
 
-void CommandRegistry::logIfWriteCommand(const std::string& cmdName,
-                                        const std::vector<std::string>& tokens) {
+void CommandRegistry::logIfWriteCommand(const string& cmdName, const vector<string>& tokens) {
     // Read-only commands — never log these
-    static const std::set<std::string> WRITE_CMDS = {
-        "SET", "DEL", "EXPIRE", "APPEND", "LPUSH", "RPUSH", "LPOP", "RPOP", "LSET", "EXPIRYAT"};
+    static const set<string> WRITE_CMDS = {"SET",   "DEL",  "EXPIRE", "APPEND", "LPUSH",
+                                           "RPUSH", "LPOP", "RPOP",   "LSET",   "EXPIRYAT"};
 
     if (WRITE_CMDS.find(cmdName) == WRITE_CMDS.end())
         return;
@@ -70,9 +69,9 @@ void CommandRegistry::logIfWriteCommand(const std::string& cmdName,
     // ---- EXPIRE key ttlSec  →  EXPIRYAT key epochMs ----
     if (cmdName == "EXPIRE" && tokens.size() >= 3) {
         try {
-            long long ttlMs = std::stoll(tokens[2]) * 1000;
+            long long ttlMs = stoll(tokens[2]) * 1000;
             long long epochMs = nowMs() + ttlMs;
-            pm_->logCommand("EXPIRYAT " + quoteIfNeeded(tokens[1]) + " " + std::to_string(epochMs));
+            pm_->logCommand("EXPIRYAT " + quoteIfNeeded(tokens[1]) + " " + to_string(epochMs));
         } catch (...) { /* malformed — skip logging */
         }
         return;
@@ -82,20 +81,20 @@ void CommandRegistry::logIfWriteCommand(const std::string& cmdName,
     // tokens: [CMD, key, val, ttlSec?]
     if ((cmdName == "SET" || cmdName == "LPUSH" || cmdName == "RPUSH") && tokens.size() >= 4) {
         try {
-            long long ttlMs = std::stoll(tokens[3]) * 1000;
+            long long ttlMs = stoll(tokens[3]) * 1000;
             long long epochMs = nowMs() + ttlMs;
 
             // 1. Log the base command without TTL (creates/updates the key/value)
             pm_->logCommand(cmdName + " " + quoteIfNeeded(tokens[1]) + " " +
                             quoteIfNeeded(tokens[2]));
             // 2. Log the absolute expiry
-            pm_->logCommand("EXPIRYAT " + quoteIfNeeded(tokens[1]) + " " + std::to_string(epochMs));
+            pm_->logCommand("EXPIRYAT " + quoteIfNeeded(tokens[1]) + " " + to_string(epochMs));
         } catch (...) { /* malformed TTL — skip logging */
         }
         return;
     }
 
-    std::string entry = cmdName;  // use uppercased name for consistency
+    string entry = cmdName;  // use uppercased name for consistency
     for (size_t i = 1; i < tokens.size(); ++i) {
         entry += " " + quoteIfNeeded(tokens[i]);
     }
@@ -103,19 +102,19 @@ void CommandRegistry::logIfWriteCommand(const std::string& cmdName,
 }
 
 // --- Token-based execute (called from the RESP server path) ---
-std::string CommandRegistry::execute(Database& db, int clientFd, std::vector<std::string>& tokens) {
+string CommandRegistry::execute(Database& db, int clientFd, vector<string>& tokens) {
     if (tokens.empty())
         return "ERR:empty command";
 
-    std::string cmdName = tokens[0];
-    std::transform(cmdName.begin(), cmdName.end(), cmdName.begin(), ::toupper);
+    string cmdName = tokens[0];
+    transform(cmdName.begin(), cmdName.end(), cmdName.begin(), ::toupper);
 
     auto it = handlers.find(cmdName);
     if (it == handlers.end())
         return "ERR:unknown command '" + tokens[0] + "'";
 
-    std::vector<std::string> args(tokens.begin() + 1, tokens.end());
-    std::string result = it->second(db, clientFd, args);
+    vector<string> args(tokens.begin() + 1, tokens.end());
+    string result = it->second(db, clientFd, args);
 
     if (pm_ && result.size() >= 5 && result.substr(0, 5) == "SUCC:") {
         bool shouldLog = (cmdName != "DEL") || (result == "SUCC:1");
@@ -126,7 +125,7 @@ std::string CommandRegistry::execute(Database& db, int clientFd, std::vector<std
     return result;
 }
 
-std::string CommandRegistry::execute(Database& db, const std::string& rawLine) {
-    std::vector<std::string> tokens = tokenize(rawLine);
+string CommandRegistry::execute(Database& db, const string& rawLine) {
+    vector<string> tokens = tokenize(rawLine);
     return execute(db, -1, tokens);  // delegate to token-based overload, clientFd=-1 for replay
 }

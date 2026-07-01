@@ -18,6 +18,8 @@
 #include "../protocol/RESPParser.h"
 #include "../protocol/RESPSerializer.h"
 
+using namespace std;
+
 static const int MAX_EVENTS = 64;
 
 Server::Server(int p, PubSubManager& pubSub) : port(p), serverFd(-1), epollFd(-1), pubSub_(pubSub) {
@@ -35,7 +37,7 @@ Server::~Server() {
 bool Server::setupSocket() {
     serverFd = socket(AF_INET, SOCK_STREAM, 0);
     if (serverFd < 0) {
-        std::cerr << "[server] Failed to create socket\n";
+        cerr << "[server] Failed to create socket\n";
         return false;
     }
 
@@ -53,12 +55,12 @@ bool Server::setupSocket() {
     addr.sin_port = htons(static_cast<uint16_t>(port));
 
     if (bind(serverFd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-        std::cerr << "[server] Failed to bind to port " << port << "\n";
+        cerr << "[server] Failed to bind to port " << port << "\n";
         return false;
     }
 
     if (listen(serverFd, 10) < 0) {
-        std::cerr << "[server] Failed to listen\n";
+        cerr << "[server] Failed to listen\n";
         return false;
     }
 
@@ -77,12 +79,12 @@ void Server::removeClient(int clientFd) {
     pubSub_.punsubscribeAll(clientFd);
     epoll_ctl(epollFd, EPOLL_CTL_DEL, clientFd, nullptr);
     close(clientFd);
-    std::cout << "[server] Client disconnected (fd=" << clientFd << ")\n";
+    cout << "[server] Client disconnected (fd=" << clientFd << ")\n";
 }
 
-void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db,
+void Server::processClientBuffer(int clientFd, string& buffer, Database& db,
                                  CommandRegistry& registry) {
-    std::string outBuf;          // accumulate all pipelined responses for a single send()
+    string outBuf;               // accumulate all pipelined responses for a single send()
     outBuf.reserve(128 * 1024);  // Pre-allocate 128KB to avoid reallocation during pipeline batches
 
     while (true) {
@@ -107,8 +109,8 @@ void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db
             continue;
 
         // Upper-case the command name for dispatch + serializer lookup
-        std::string cmdName = cmd.args[0];
-        std::transform(cmdName.begin(), cmdName.end(), cmdName.begin(), ::toupper);
+        string cmdName = cmd.args[0];
+        transform(cmdName.begin(), cmdName.end(), cmdName.begin(), ::toupper);
 
         // QUIT / EXIT — send +OK and close gracefully (Redis behavior)
         if (cmdName == "QUIT" || cmdName == "EXIT") {
@@ -130,11 +132,11 @@ void Server::processClientBuffer(int clientFd, std::string& buffer, Database& db
         }
 
         // Dispatch through the command registry
-        std::string internalResult = registry.execute(db, clientFd, cmd.args);
+        string internalResult = registry.execute(db, clientFd, cmd.args);
 
         // "RESP:" prefix = pre-serialized RESP bytes, send as-is (used by LRANGE)
         if (internalResult.size() >= 5 && internalResult.compare(0, 5, "RESP:") == 0) {
-            outBuf.append(internalResult, 5, std::string::npos);
+            outBuf.append(internalResult, 5, string::npos);
         } else {
             outBuf += RESPSerializer::serialize(internalResult, cmdName);
         }
@@ -154,20 +156,20 @@ void Server::start(Database& db, CommandRegistry& registry) {
     // Create the epoll instance
     epollFd = epoll_create1(0);
     if (epollFd < 0) {
-        std::cerr << "[server] Failed to create epoll instance\n";
+        cerr << "[server] Failed to create epoll instance\n";
         return;
     }
 
     // Register the listening socket so we know when a new client connects
     if (!addToEpoll(serverFd)) {
-        std::cerr << "[server] Failed to add server socket to epoll\n";
+        cerr << "[server] Failed to add server socket to epoll\n";
         return;
     }
 
-    std::cout << "[server] RAMpage server listening on port " << port << " (RESP protocol) ...\n";
+    cout << "[server] RAMpage server listening on port " << port << " (RESP protocol) ...\n";
 
     // Per-client input buffers: accumulates bytes until a full RESP frame arrives
-    std::unordered_map<int, std::string> clientBuffers;
+    unordered_map<int, string> clientBuffers;
 
     epoll_event events[MAX_EVENTS];
 
@@ -176,7 +178,7 @@ void Server::start(Database& db, CommandRegistry& registry) {
         // Block until at least one fd is ready; -1 means wait forever
         int numReady = epoll_wait(epollFd, events, MAX_EVENTS, -1);
         if (numReady < 0) {
-            std::cerr << "[server] epoll_wait error\n";
+            cerr << "[server] epoll_wait error\n";
             break;
         }
 
@@ -198,8 +200,8 @@ void Server::start(Database& db, CommandRegistry& registry) {
                 addToEpoll(clientFd);
                 clientBuffers[clientFd] = "";  // initialize empty buffer for this client
 
-                std::cout << "[server] New client connected (fd=" << clientFd << ") from "
-                          << inet_ntoa(clientAddr.sin_addr) << "\n";
+                cout << "[server] New client connected (fd=" << clientFd << ") from "
+                     << inet_ntoa(clientAddr.sin_addr) << "\n";
 
             } else {
                 // --- Existing client sent data ---
