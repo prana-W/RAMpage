@@ -118,7 +118,8 @@ CommandResult CommandRegistry::execute(Database& db, int clientFd, const vector<
     CommandContext ctx{db, clientFd, args, pubSub};
     CommandResult result = it->second(ctx);
 
-    if (pm_ && result.type == CommandResult::Type::SUCCESS) {
+    if (pm_ &&
+        (result.type == CommandResult::Type::SUCCESS || result.type == CommandResult::Type::RESP)) {
         bool shouldLog = (cmdName != "DEL") || (result.message == "1");
         if (shouldLog)
             logIfWriteCommand(cmdName, tokens);
